@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { generateFacebookImageAction, generateFacebookPostAction } from "@/app/actions";
 import { parseContentStudioNotes } from "@/lib/content-studio";
+import { isOpenAiImageConfigured } from "@/lib/openai-config";
 import { channelAr, duplicateRiskAr, statusAr } from "@/lib/ui-ar";
 import { DismissCardButton, ShowDismissedToggle } from "./dismiss-card";
 import { Icons } from "./icons";
@@ -21,7 +22,7 @@ function EmptyState({ text }: { text: string }) {
 
 export function ProductWorkspace({ data }: { data: ProductWorkspaceData }) {
   const { product, providerStatus } = data;
-  const imageModelConfigured = Boolean(process.env.OPENAI_IMAGE_MODEL || process.env.IMAGE_GENERATION_MODEL);
+  const imageModelConfigured = isOpenAiImageConfigured();
   const returnTo = `/products/${product.slug}${data.showDismissed ? "?showDismissed=1" : ""}`;
   const generatedPosts = data.recentPosts
     .map((post: any) => ({ post, output: parseContentStudioNotes(post.notes) }))
@@ -124,7 +125,10 @@ export function ProductWorkspace({ data }: { data: ProductWorkspaceData }) {
         <div className="button-row task-actions">
           <form action={generateFacebookPostAction}>
             <input name="productSlug" type="hidden" value={product.slug} />
-            <SubmitButton pendingLabel="جارٍ إنشاء منشور فيسبوك...">
+            <SubmitButton
+              disabled={!providerStatus.openAiConfigured}
+              pendingLabel="جارٍ إنشاء منشور فيسبوك..."
+            >
               <Icons.megaphone size={18} />
               إنشاء منشور فيسبوك
             </SubmitButton>

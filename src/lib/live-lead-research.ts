@@ -6,6 +6,7 @@ import {
   LeadSearchProviderStatus,
   LeadSearchResult
 } from "./lead-search-provider";
+import { getOpenAiTextConfig } from "./openai-config";
 import { getProduct, ProductSlug } from "./product-data";
 import {
   LiveLeadResearchLead,
@@ -358,11 +359,7 @@ async function callOpenAiForLeadResearch(
   context: Awaited<ReturnType<typeof loadResearchContext>>,
   candidates: Awaited<ReturnType<typeof enrichSearchResults>>
 ) {
-  const apiKey = process.env.OPENAI_API_KEY;
-
-  if (!apiKey) {
-    throw new Error("OPENAI_API_KEY is not configured.");
-  }
+  const { apiKey, model } = getOpenAiTextConfig();
 
   const response = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
@@ -371,7 +368,7 @@ async function callOpenAiForLeadResearch(
       "Content-Type": "application/json"
     },
     body: JSON.stringify({
-      model: process.env.OPENAI_MODEL || "gpt-4.1-mini",
+      model,
       messages: [
         {
           role: "system",

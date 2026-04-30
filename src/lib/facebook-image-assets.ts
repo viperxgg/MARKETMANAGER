@@ -1,4 +1,5 @@
 import { prisma } from "./db";
+import { getOpenAiImageConfig } from "./openai-config";
 import { getProduct } from "./product-data";
 import {
   FacebookImageAssetOutput,
@@ -49,12 +50,7 @@ function buildImagePrompt(input: {
 export async function generateFacebookImageAsset(input: {
   socialPostDraftId: string;
 }): Promise<FacebookImageAssetOutput> {
-  const apiKey = process.env.OPENAI_API_KEY;
-  const imageModel = process.env.OPENAI_IMAGE_MODEL || process.env.IMAGE_GENERATION_MODEL;
-
-  if (!apiKey || !imageModel) {
-    throw new Error("OPENAI_IMAGE_CONFIGURATION_MISSING");
-  }
+  const { apiKey, imageModel } = getOpenAiImageConfig();
 
   const draft = await prisma.socialPostDraft.findUnique({
     where: { id: input.socialPostDraftId },

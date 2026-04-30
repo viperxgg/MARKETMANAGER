@@ -1,5 +1,6 @@
 import { prisma } from "./db";
 import { ensureProductRecord } from "./data-service";
+import { getOpenAiTextConfig } from "./openai-config";
 import { getProduct, ProductSlug } from "./product-data";
 import {
   FacebookContentStudioOutput,
@@ -188,11 +189,7 @@ async function loadContentStudioContext(productSlug: ProductSlug) {
 async function callOpenAiForFacebookPost(
   context: Awaited<ReturnType<typeof loadContentStudioContext>>
 ) {
-  const apiKey = process.env.OPENAI_API_KEY;
-
-  if (!apiKey) {
-    throw new Error("OPENAI_API_KEY is not configured.");
-  }
+  const { apiKey, model } = getOpenAiTextConfig();
 
   const response = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
@@ -201,7 +198,7 @@ async function callOpenAiForFacebookPost(
       "Content-Type": "application/json"
     },
     body: JSON.stringify({
-      model: process.env.OPENAI_MODEL || "gpt-4.1-mini",
+      model,
       messages: [
         {
           role: "system",
@@ -232,64 +229,6 @@ async function callOpenAiForFacebookPost(
   return facebookContentStudioOutputSchema.parse(parseJsonObject(content));
 }
 
-function fallbackFacebookPost(
-  context: Awaited<ReturnType<typeof loadContentStudioContext>>
-): FacebookContentStudioOutput {
-  const duplicateRisk = context.duplicateSignals.socialDrafts.length > 0 ? "medium" : "low";
-
-  if (context.product.slug === "nord-smart-menu") {
-    return facebookContentStudioOutputSchema.parse({
-      productSlug: "nord-smart-menu",
-      platform: "facebook",
-      language: "sv",
-      postText:
-        "En tydlig digital meny gör serviceflödet lugnare. Med Nord Smart Menu kan gästen se rätter, bilder och val direkt i mobilen, samtidigt som personalen behåller kontrollen över presentation, beställningsflöde och nästa steg. För restauranger som vill skapa en smidigare gästupplevelse utan att tappa den personliga känslan.",
-      strategicReason:
-        "Det här inlägget lyfter produktens kärnvärde utan att lova resultat eller blanda in andra Smart Art AI Solutions-produkter.",
-      targetAudience: context.product.audience,
-      contentAngle: "QR menu clarity for guests",
-      duplicateRisk,
-      similarityNotes:
-        "تمت مراجعة المسودات والموافقات والذاكرة الحديثة لهذا المنتج محليًا. أضف OPENAI_API_KEY لتفعيل مراجعة تشابه أعمق عبر النموذج.",
-      imageConcept:
-        "A calm restaurant table scene where a guest views a clean digital menu on a phone while staff service continues in the background.",
-      imagePrompt:
-        "Premium Scandinavian restaurant interior, guest viewing a polished digital menu on a smartphone, subtle staff service in background, warm natural light, clean B2B product marketing style, no logos, no exaggerated claims",
-      imageUrl: null,
-      requiresApproval: true,
-      warnings: [
-        "OPENAI_API_KEY غير موجود. تم إنشاء مسودة محلية آمنة بدل استدعاء النموذج.",
-        "لا يوجد نشر تلقائي. موافقة المالك مطلوبة."
-      ]
-    });
-  }
-
-  return facebookContentStudioOutputSchema.parse({
-    productSlug: "stadsync-ai",
-    platform: "facebook",
-    language: "sv",
-    postText:
-      "När bokningar, kundinstruktioner och arbetsuppgifter ligger utspridda blir varje dag svårare att följa upp. StädSync AI hjälper städföretag att samla arbetsflödet: tydligare uppgifter för teamet, digitala checklistor, bättre kundkommunikation och struktur för RUT-relaterade moment med mänsklig kontroll. Mindre friktion i vardagen. Mer konsekvent kvalitet.",
-    strategicReason:
-      "Inlägget fokuserar på operativ tydlighet för svenska städföretag och undviker alla ämnen som hör till andra produktkontexter.",
-    targetAudience: context.product.audience,
-    contentAngle: "Worker task management and digital checklists",
-    duplicateRisk,
-    similarityNotes:
-      "تمت مراجعة المسودات والموافقات والذاكرة الحديثة لهذا المنتج محليًا. أضف OPENAI_API_KEY لتفعيل مراجعة تشابه أعمق عبر النموذج.",
-    imageConcept:
-      "A cleaning operations manager reviewing structured tasks and quality follow-up on a tablet beside neatly organized field work supplies.",
-    imagePrompt:
-      "Premium Scandinavian B2B operations image for a Swedish cleaning company, operations manager reviewing worker tasks and digital checklists on a tablet, organized cleaning supplies, bright professional office and field-service feel, no logos, no exaggerated claims",
-    imageUrl: null,
-    requiresApproval: true,
-    warnings: [
-      "OPENAI_API_KEY غير موجود. تم إنشاء مسودة محلية آمنة بدل استدعاء النموذج.",
-      "لا يوجد نشر تلقائي. موافقة المالك مطلوبة."
-    ]
-  });
-}
-
 export function parseContentStudioNotes(notes: string) {
   if (!notes.startsWith(notesPrefix)) {
     return null;
@@ -307,17 +246,7 @@ export function parseContentStudioNotes(notes: string) {
 export async function generateFacebookPostForProduct(input: { productSlug: ProductSlug }) {
   const productSlug = productSlugSchema.parse(input.productSlug);
   const context = await loadContentStudioContext(productSlug);
-  let output: FacebookContentStudioOutput;
-
-  try {
-    output = await callOpenAiForFacebookPost(context);
-  } catch (error) {
-    if (error instanceof Error && error.message === "OPENAI_API_KEY is not configured.") {
-      output = fallbackFacebookPost(context);
-    } else {
-      throw error;
-    }
-  }
+  let output = await callOpenAiForFacebookPost(context);
 
   output = facebookContentStudioOutputSchema.parse({
     ...output,

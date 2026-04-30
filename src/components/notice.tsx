@@ -23,6 +23,10 @@ const notices: Record<string, { type: "success" | "warning" | "error"; message: 
     type: "error",
     message: "تعذر إنشاء مسودة فيسبوك. تحقق من إعدادات OpenAI وحدود سياق المنتج."
   },
+  "openai-config-missing": {
+    type: "warning",
+    message: "OpenAI غير مضبوط على الخادم. أضف OPENAI_API_KEY و OPENAI_MODEL. لم يتم توليد أو حفظ أي نتيجة ذكاء اصطناعي وهمية."
+  },
   "facebook-image-created": {
     type: "success",
     message: "تم توليد صورة فيسبوك وحفظها كأصل مسودة مرتبط بالمنشور. لم يتم نشر أي شيء."

@@ -6,6 +6,7 @@ import {
   agencyBrainOutputSchema,
   agencyBrainScopeSchema
 } from "./validation";
+import { getOpenAiTextConfig } from "./openai-config";
 
 export type AgencyBrainScope = "global" | ProductSlug;
 export type AgencyBrainObjective =
@@ -290,11 +291,7 @@ function buildPrompt(context: Awaited<ReturnType<typeof loadAgencyBrainContext>>
 }
 
 async function callOpenAiForAgencyBrain(context: Awaited<ReturnType<typeof loadAgencyBrainContext>>) {
-  const apiKey = process.env.OPENAI_API_KEY;
-
-  if (!apiKey) {
-    throw new Error("OPENAI_API_KEY is not configured.");
-  }
+  const { apiKey, model } = getOpenAiTextConfig();
 
   const response = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
@@ -303,7 +300,7 @@ async function callOpenAiForAgencyBrain(context: Awaited<ReturnType<typeof loadA
       "Content-Type": "application/json"
     },
     body: JSON.stringify({
-      model: process.env.OPENAI_MODEL || "gpt-4.1-mini",
+      model,
       messages: [
         {
           role: "system",
@@ -334,62 +331,9 @@ async function callOpenAiForAgencyBrain(context: Awaited<ReturnType<typeof loadA
   return agencyBrainOutputSchema.parse(parseJsonObject(content));
 }
 
-function fallbackOutput(context: Awaited<ReturnType<typeof loadAgencyBrainContext>>): AgencyBrainOutput {
-  const productName = context.product?.name ?? "Smart Art AI Solutions";
-  const duplicateRisk = context.duplicateSignals.campaigns.length > 0 ? "medium" : "low";
-
-  return agencyBrainOutputSchema.parse({
-    scope: context.scope,
-    productSlug: context.scope === "global" ? null : context.scope,
-    objective: context.objective,
-    summary:
-      "OPENAI_API_KEY is not configured, so Agency Brain created a local safety-first planning stub instead of calling the AI model.",
-    reasoning:
-      "The recommendation is intentionally conservative. Configure OPENAI_API_KEY to enable model-based reasoning over product context, memory, and duplicate signals.",
-    recommendations: [
-      {
-        type: "configuration",
-        title: `Enable Agency Brain AI for ${productName}`,
-        description:
-          "Add OPENAI_API_KEY on the server environment, then rerun this objective to receive model-generated strategy with duplicate-risk analysis.",
-        targetAudience: context.scope === "global" ? "Smart Art AI Solutions" : context.product?.audience ?? productName,
-        channel: "internal",
-        duplicateRisk,
-        similarityNotes:
-          "Local duplicate check reviewed stored campaigns, drafts, leads, memories, approvals, and reports but did not call the AI model.",
-        nextStep: "revise_existing",
-        requiresApproval: true
-      }
-    ],
-    memoryUpdates: [
-      {
-        type: "system_readiness",
-        title: "Agency Brain requires server-side OpenAI configuration",
-        content:
-          "Agency Brain is wired to use OPENAI_API_KEY from the server environment and keeps all recommendations approval-gated.",
-        confidence: 95
-      }
-    ],
-    warnings: [
-      "OPENAI_API_KEY is missing. No API key was exposed or logged.",
-      "No external action was executed."
-    ]
-  });
-}
-
 export async function runAgencyBrain(input: RunAgencyBrainInput) {
   const context = await loadAgencyBrainContext(input);
-  let output: AgencyBrainOutput;
-
-  try {
-    output = await callOpenAiForAgencyBrain(context);
-  } catch (error) {
-    if (error instanceof Error && error.message === "OPENAI_API_KEY is not configured.") {
-      output = fallbackOutput(context);
-    } else {
-      throw error;
-    }
-  }
+  const output = await callOpenAiForAgencyBrain(context);
 
   const productRecord =
     output.productSlug === null

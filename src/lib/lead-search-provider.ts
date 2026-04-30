@@ -1,4 +1,5 @@
 import { ProductSlug } from "./product-data";
+import { isOpenAiTextConfigured } from "./openai-config";
 
 export type LeadSearchProviderId =
   | "google-custom-search"
@@ -75,9 +76,10 @@ export function getLeadSearchProviderStatus(): LeadSearchProviderStatus {
   const providerConfigured = Boolean(
     providerId && (providerId === "manual-csv" || process.env.LEAD_SEARCH_API_KEY)
   );
-  const openAiConfigured = Boolean(process.env.OPENAI_API_KEY);
+  const openAiConfigured = isOpenAiTextConfigured();
   const missing = [
-    !openAiConfigured ? "OPENAI_API_KEY" : "",
+    !process.env.OPENAI_API_KEY ? "OPENAI_API_KEY" : "",
+    !process.env.OPENAI_MODEL ? "OPENAI_MODEL" : "",
     !configuredProvider ? "LEAD_SEARCH_PROVIDER" : "",
     configuredProvider && !providerId ? "SUPPORTED_LEAD_SEARCH_PROVIDER" : "",
     providerId && providerId !== "manual-csv" && !process.env.LEAD_SEARCH_API_KEY

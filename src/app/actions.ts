@@ -9,6 +9,7 @@ import { buildDailySummary, buildLeadResearchBrief, buildPostDraft } from "@/lib
 import { hasDatabaseUrl, prisma } from "@/lib/db";
 import { ensureProductRecord } from "@/lib/data-service";
 import { importManualCsvLeads } from "@/lib/manual-csv-leads";
+import { openAiTextConfigurationError } from "@/lib/openai-config";
 import { getProduct, products } from "@/lib/product-data";
 import {
   campaignBriefSchema,
@@ -297,7 +298,11 @@ export async function runAgencyBrainAction(formData: FormData) {
   try {
     const result = await runAgencyBrain(parsed.data);
     reportId = result.reportId;
-  } catch {
+  } catch (error) {
+    if (error instanceof Error && error.message === openAiTextConfigurationError) {
+      notice("/agency-brain", "openai-config-missing");
+    }
+
     notice("/agency-brain", "agency-brain-error");
   }
 
@@ -511,7 +516,11 @@ export async function generateFacebookPostAction(formData: FormData) {
       productSlug: parsed.data.productSlug
     });
     draftId = result.draftId;
-  } catch {
+  } catch (error) {
+    if (error instanceof Error && error.message === openAiTextConfigurationError) {
+      notice(`/products/${parsed.data.productSlug}`, "openai-config-missing");
+    }
+
     notice(`/products/${parsed.data.productSlug}`, "content-studio-error");
   }
 

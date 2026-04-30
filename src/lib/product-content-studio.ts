@@ -1,5 +1,6 @@
 import { prisma } from "./db";
 import { ensureProductRecord } from "./data-service";
+import { getOpenAiTextConfig } from "./openai-config";
 import { getProduct, ProductSlug } from "./product-data";
 import {
   FacebookContentStudioOutput,
@@ -158,11 +159,7 @@ function buildPrompt(context: Awaited<ReturnType<typeof loadStudioContext>>) {
 }
 
 async function callOpenAiForFacebookPost(context: Awaited<ReturnType<typeof loadStudioContext>>) {
-  const apiKey = process.env.OPENAI_API_KEY;
-
-  if (!apiKey) {
-    throw new Error("OPENAI_API_KEY is not configured.");
-  }
+  const { apiKey, model } = getOpenAiTextConfig();
 
   const response = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
@@ -171,7 +168,7 @@ async function callOpenAiForFacebookPost(context: Awaited<ReturnType<typeof load
       "Content-Type": "application/json"
     },
     body: JSON.stringify({
-      model: process.env.OPENAI_MODEL || "gpt-4.1-mini",
+      model,
       messages: [
         {
           role: "system",
@@ -202,56 +199,9 @@ async function callOpenAiForFacebookPost(context: Awaited<ReturnType<typeof load
   return facebookContentStudioOutputSchema.parse(parseJsonObject(content));
 }
 
-function fallbackOutput(context: Awaited<ReturnType<typeof loadStudioContext>>): FacebookContentStudioOutput {
-  const { product, recentPosts } = context;
-  const duplicateRisk = recentPosts.length > 0 ? "medium" : "low";
-  const angle = product.contentAngles[0];
-  const isNord = product.slug === "nord-smart-menu";
-
-  return facebookContentStudioOutputSchema.parse({
-    productSlug: product.slug,
-    platform: "facebook",
-    language: "sv",
-    postText: isNord
-      ? `En tydligare gästupplevelse börjar ofta med det första steget: att snabbt kunna öppna, förstå och välja från menyn. ${product.name} hjälper verksamheter att presentera menyn digitalt, hålla innehållet uppdaterat och skapa ett lugnare flöde mellan gäst och personal.\n\nVill du se hur ett sådant flöde kan se ut i praktiken?`
-      : `När bokningar, instruktioner och uppföljning hamnar på flera ställen blir vardagen lätt svår att hålla konsekvent. ${product.name} hjälper städföretag att samla arbetsflöden, tydliggöra uppgifter och skapa bättre överblick i det dagliga arbetet.\n\nVill du se hur ett mer strukturerat arbetssätt kan se ut?`,
-    strategicReason:
-      "OPENAI_API_KEY غير مضبوط، لذلك تستخدم هذه المسودة المحلية الآمنة سياق المنتج المختار والسجل الحديث بدون استدعاء النموذج.",
-    targetAudience: product.audience,
-    contentAngle: angle,
-    duplicateRisk,
-    similarityNotes:
-      recentPosts.length > 0
-        ? "توجد مسودات فيسبوك حديثة لهذا المنتج، لذلك راجع تداخل الزاوية قبل الموافقة."
-        : "لا توجد مسودات فيسبوك حديثة لهذا المنتج.",
-    imageConcept: isNord
-      ? "Premium hospitality service scene with a phone-based digital product interface."
-      : "Premium operations dashboard and field-team workflow scene for a service company.",
-    imagePrompt: isNord
-      ? "Premium Scandinavian hospitality setting, phone showing a refined digital product interface, calm staff workflow, elegant dark UI accents, realistic lighting, no fake logos, no exaggerated claims."
-      : "Premium Scandinavian cleaning operations setting, tablet dashboard with task overview and quality follow-up, calm professional service context, elegant dark UI accents, no fake logos, no exaggerated claims.",
-    imageUrl: null,
-    requiresApproval: true,
-    warnings: [
-      "OPENAI_API_KEY غير موجود. تم إنشاء مسودة محلية آمنة.",
-      "لم يحدث أي نشر على فيسبوك."
-    ]
-  });
-}
-
 export async function generateFacebookPostForProduct(productSlug: ProductSlug) {
   const context = await loadStudioContext(productSlug);
-  let output: FacebookContentStudioOutput;
-
-  try {
-    output = await callOpenAiForFacebookPost(context);
-  } catch (error) {
-    if (error instanceof Error && error.message === "OPENAI_API_KEY is not configured.") {
-      output = fallbackOutput(context);
-    } else {
-      throw error;
-    }
-  }
+  let output = await callOpenAiForFacebookPost(context);
 
   output = facebookContentStudioOutputSchema.parse({
     ...output,

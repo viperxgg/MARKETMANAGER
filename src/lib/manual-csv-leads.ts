@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { prisma } from "./db";
 import { ensureProductRecord } from "./data-service";
+import { getOpenAiTextConfig, isOpenAiTextConfigured } from "./openai-config";
 import { getProduct, ProductSlug } from "./product-data";
 import { productSlugSchema } from "./validation";
 
@@ -352,11 +353,7 @@ async function callOpenAiForCsvLeads(
   context: Awaited<ReturnType<typeof loadCsvContext>>,
   rows: Array<CsvRow & { rowNumber: number }>
 ) {
-  const apiKey = process.env.OPENAI_API_KEY;
-
-  if (!apiKey) {
-    throw new Error("OPENAI_API_KEY is not configured.");
-  }
+  const { apiKey, model } = getOpenAiTextConfig();
 
   const response = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
@@ -365,7 +362,7 @@ async function callOpenAiForCsvLeads(
       "Content-Type": "application/json"
     },
     body: JSON.stringify({
-      model: process.env.OPENAI_MODEL || "gpt-4.1-mini",
+      model,
       messages: [
         {
           role: "system",
@@ -587,15 +584,15 @@ export async function importManualCsvLeads(input: {
   let outreachLearning = "No AI scoring was completed.";
   let warnings: string[] = [];
 
-  if (!process.env.OPENAI_API_KEY) {
+  if (!isOpenAiTextConfigured()) {
     rejected.push(
       ...rowsForScoring.map((row) => ({
         rowNumber: row.rowNumber,
         companyName: row.companyName,
-        reason: "OPENAI_API_KEY is missing. The app did not guess fit scores or draft emails."
+        reason: "OpenAI text configuration is missing. The app did not guess fit scores or draft emails."
       }))
     );
-    warnings = ["OPENAI_API_KEY is missing. No leads were saved."];
+    warnings = ["OpenAI text configuration is missing. No leads were saved."];
   } else if (rowsForScoring.length === 0) {
     warnings = ["No valid CSV rows were available for scoring."];
   } else {

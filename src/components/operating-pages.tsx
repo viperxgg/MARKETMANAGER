@@ -15,6 +15,7 @@ import {
 import { getOperatingData } from "@/lib/data-service";
 import { parseContentStudioNotes } from "@/lib/content-studio";
 import { getLeadSearchProviderStatus } from "@/lib/lead-search-provider";
+import { isOpenAiImageConfigured, isOpenAiTextConfigured } from "@/lib/openai-config";
 import { products } from "@/lib/product-data";
 import { getLeadScoringRules } from "@/lib/scoring";
 import { channelAr, duplicateRiskAr, scopeAr, statusAr } from "@/lib/ui-ar";
@@ -791,9 +792,8 @@ export function OutreachOperatingPage({ data }: { data: OperatingData }) {
 export function SocialOperatingPage({ data }: { data: OperatingData }) {
   const campaigns = data.campaigns as AnyRecord[];
   const posts = data.socialPostDrafts as AnyRecord[];
-  const imageGenerationConfigured = Boolean(
-    process.env.OPENAI_API_KEY && (process.env.OPENAI_IMAGE_MODEL || process.env.IMAGE_GENERATION_MODEL)
-  );
+  const openAiTextConfigured = isOpenAiTextConfigured();
+  const imageGenerationConfigured = isOpenAiImageConfigured();
   const filterQuery =
     data.productFilter !== "all" ? `?product=${data.productFilter}` : "";
   const basePath = `/social-studio${filterQuery}`;
@@ -831,9 +831,14 @@ export function SocialOperatingPage({ data }: { data: OperatingData }) {
               يستخدم سياق {selectedProduct.name} فقط لإنشاء منشور فيسبوك سويدي كمسودة وإرساله للموافقة.
               توليد الصورة خطوة منفصلة بعد حفظ المسودة.
             </p>
+            {!openAiTextConfigured ? (
+              <div className="notice warning">
+                OpenAI غير مضبوط على الخادم. أضف OPENAI_API_KEY و OPENAI_MODEL. لن يتم توليد أو حفظ مسودة AI وهمية.
+              </div>
+            ) : null}
             <form action={generateFacebookPostAction} className="stack">
               <input name="productSlug" type="hidden" value={selectedProduct.slug} />
-              <button className="button" type="submit">
+              <button className="button" disabled={!openAiTextConfigured} type="submit">
                 <Icons.megaphone size={18} />
                 إنشاء منشور فيسبوك بالذكاء الاصطناعي
               </button>
