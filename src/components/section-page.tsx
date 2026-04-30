@@ -473,6 +473,7 @@ export function SettingsSection({
   integrationStatus: {
     openAiTextConfigured: boolean;
     openAiImageConfigured: boolean;
+    facebookPublishingConfigured: boolean;
     imageStorageConfigured: boolean;
     leadProviderStatus: {
       providerName: string;
@@ -531,12 +532,20 @@ export function SettingsSection({
               </span>
             </div>
             <div className="split-row">
+              <span>Facebook publishing</span>
+              <span className={`badge ${integrationStatus.facebookPublishingConfigured ? "" : "warning"}`}>
+                {integrationStatus.facebookPublishingConfigured ? "مضبوط" : "غير موجود"}
+              </span>
+            </div>
+            <div className="split-row">
               <span>مزوّد البريد</span>
               <span className="badge warning">غير متصل بعد</span>
             </div>
             <div className="split-row">
               <span>واجهات التواصل الاجتماعي</span>
-              <span className="badge warning">غير متصلة بعد</span>
+              <span className={`badge ${integrationStatus.facebookPublishingConfigured ? "" : "warning"}`}>
+                {integrationStatus.facebookPublishingConfigured ? "Facebook فقط" : "غير متصلة بعد"}
+              </span>
             </div>
             <div className="split-row">
               <span>الوضع اليدوي</span>

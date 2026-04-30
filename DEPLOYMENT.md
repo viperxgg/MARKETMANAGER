@@ -2,10 +2,11 @@
 
 This app is an internal AI Marketing Agency OS for Smart Art AI Solutions. Deploy it to a private Vercel Preview or staging environment first, then configure APIs through Vercel Environment Variables.
 
-The app must remain draft-only:
+The app must remain approval-gated:
 
 - No automatic email sending.
 - No automatic social publishing.
+- Facebook publishing is allowed only after the owner clicks `Approve & Publish` on an approved Facebook draft.
 - No external customer contact.
 - No automatic approval.
 - `approved_by_owner` remains required before any execution-related workflow.
@@ -20,7 +21,7 @@ The project is ready for Vercel as a Next.js App Router application.
 - Database: PostgreSQL through Prisma
 - Prisma client generation: `postinstall` runs `prisma generate`
 
-Do not add Gmail, Meta, Facebook publishing, or email execution integrations for staging.
+Do not add Gmail, Instagram, or email execution integrations for staging.
 
 ## Required Environment Variables
 
@@ -43,6 +44,8 @@ LEAD_SEARCH_API_KEY=
 OPENAI_IMAGE_MODEL=
 IMAGE_STORAGE_PROVIDER=
 IMAGE_STORAGE_BUCKET=
+META_PAGE_ID=
+META_ACCESS_TOKEN=
 ```
 
 ### DATABASE_URL
@@ -116,19 +119,28 @@ Optional placeholders for later persistent image storage.
 
 Generated image metadata is stored as a draft asset linked to the Facebook post draft. Do not configure a storage provider until it is implemented and reviewed.
 
+### META_PAGE_ID / META_ACCESS_TOKEN
+
+Server-side only. These enable the Approval Center `Approve & Publish` action for Facebook post drafts.
+
+Do not prefix either value with `NEXT_PUBLIC_`. Do not paste tokens into screenshots, logs, pull requests, or client-side code.
+
+If either value is missing, the UI shows `Facebook not configured` and no Facebook publish request is sent.
+
 ## Safe Missing-Integration Behavior
 
 The app intentionally supports safe degraded states:
 
 - Missing `DATABASE_URL`: preview mode; actions are validated but not persisted.
-- Missing `OPENAI_API_KEY`: AI features show configuration warnings or local safe draft behavior where implemented.
+- Missing `OPENAI_API_KEY`: AI features show configuration warnings and do not create fake AI results.
 - Missing live lead provider: live research shows provider status and does not invent companies.
 - Missing `LEAD_SEARCH_API_KEY`: live provider remains unavailable unless using `manual-csv`.
+- Missing `META_PAGE_ID` or `META_ACCESS_TOKEN`: Facebook publishing is disabled and returns a safe configuration warning.
 
 ## Secret Handling
 
 - `.env` and `.env.local` are ignored by Git.
-- Do not log `DATABASE_URL`, `OPENAI_API_KEY`, or `LEAD_SEARCH_API_KEY`.
+- Do not log `DATABASE_URL`, `OPENAI_API_KEY`, `LEAD_SEARCH_API_KEY`, or `META_ACCESS_TOKEN`.
 - Prisma production logging is disabled in app code to avoid exposing connection details in deployment logs.
 - Use only server-side `process.env.*` access for secrets.
 - Never expose secrets through `NEXT_PUBLIC_*`.
@@ -154,10 +166,12 @@ npm run db:push
 - `/agency-brain`
 - `/lead-research`
 - `/approval-center`
+- One Facebook draft approval detail page, with `Approve & Publish` visible only for Facebook draft approvals.
 
 8. Confirm safety:
 
 - No send button performs live sending.
+- No Facebook publish happens without clicking `Approve & Publish` and confirming the browser dialog.
 - No publish button performs live publishing.
 - Generated work remains draft/pending review.
 - Approval Center remains the final review gate.

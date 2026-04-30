@@ -2,10 +2,12 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { updateApprovalDecisionAction } from "@/app/actions";
 import { AppShell } from "@/components/app-shell";
-import { Notice } from "@/components/notice";
+import { FacebookPublishForm } from "@/components/facebook-publish-button";
 import { Icons } from "@/components/icons";
+import { Notice } from "@/components/notice";
 import { getApprovalItemDetail } from "@/lib/data-service";
 import { statusAr } from "@/lib/ui-ar";
+import { isFacebookPublishingConfigured } from "@/services/facebook-publisher";
 
 export const dynamic = "force-dynamic";
 
@@ -35,6 +37,13 @@ function DecisionButton({
   );
 }
 
+function formatDate(value: Date | string) {
+  return new Intl.DateTimeFormat("ar", {
+    dateStyle: "medium",
+    timeStyle: "short"
+  }).format(new Date(value));
+}
+
 export default async function ApprovalItemDetailPage({
   params,
   searchParams
@@ -49,6 +58,22 @@ export default async function ApprovalItemDetailPage({
     notFound();
   }
 
+  const socialPostDraft = "socialPostDraft" in item ? item.socialPostDraft : null;
+  const canPublishFacebook =
+    Boolean(socialPostDraft) &&
+    socialPostDraft?.platform === "facebook" &&
+    (item.itemType === "social_post_draft" || item.itemType === "content_studio_facebook_post");
+  const facebookConfigured = isFacebookPublishingConfigured();
+  const alreadyPublished = socialPostDraft?.status === "published" || Boolean(socialPostDraft?.providerPostId);
+  const publishDisabled = !canPublishFacebook || !facebookConfigured || alreadyPublished;
+  const publishDisabledReason = !canPublishFacebook
+    ? "هذا العنصر ليس مسودة فيسبوك قابلة للنشر."
+    : alreadyPublished
+    ? "تم نشر هذه المسودة مسبقًا."
+    : !facebookConfigured
+    ? "Facebook not configured. أضف META_PAGE_ID و META_ACCESS_TOKEN على الخادم."
+    : undefined;
+
   return (
     <AppShell>
       <Notice code={query.notice} />
@@ -58,12 +83,13 @@ export default async function ApprovalItemDetailPage({
             <div className="eyebrow">مراجعة الموافقة</div>
             <h1 className="page-title">{item.itemType}</h1>
             <p className="muted">
-              راجع المحتوى والمخاطر وقائمة الالتزام. الموافقة لا تشغّل إرسالًا أو نشرًا.
+              راجع المحتوى والمخاطر وقائمة الالتزام. النشر الخارجي لا يحدث إلا عبر زر Approve & Publish
+              وبعد تأكيد المالك.
             </p>
           </div>
           <div className="button-row">
             <span className="badge warning">{statusAr(item.status)}</span>
-            <span className="badge">التنفيذ اليدوي مطلوب: نعم</span>
+            <span className="badge">موافقة المالك: {String(item.approved_by_owner)}</span>
           </div>
         </div>
 
@@ -117,8 +143,8 @@ export default async function ApprovalItemDetailPage({
               {item.riskWarnings.map((warning) => (
                 <li key={warning}>{warning}</li>
               ))}
-              <li>لا يوجد إرسال مباشر من هذه اللوحة.</li>
-              <li>لا يوجد نشر مباشر من هذه اللوحة.</li>
+              <li>لا يوجد إرسال بريد من هذه اللوحة.</li>
+              <li>نشر فيسبوك يتطلب زر Approve & Publish وتأكيدًا يدويًا.</li>
             </ul>
           </div>
 
@@ -128,23 +154,85 @@ export default async function ApprovalItemDetailPage({
               {item.complianceChecklist.map((check) => (
                 <li key={check}>{check}</li>
               ))}
-              <li>موافقة المالك مطلوبة قبل أي إجراء خارجي يدوي.</li>
+              <li>لا يتم عرض META_ACCESS_TOKEN أو أي سر في الواجهة.</li>
             </ul>
           </div>
         </section>
+
+        {canPublishFacebook ? (
+          <section className="grid two">
+            <div className="panel social-preview">
+              <div className="split-row">
+                <strong>{socialPostDraft?.product.name}</strong>
+                <span className="badge">{statusAr(socialPostDraft?.status)}</span>
+              </div>
+              <h2>{socialPostDraft?.hook}</h2>
+              <p>{socialPostDraft?.body}</p>
+              {socialPostDraft?.cta ? <p className="muted">{socialPostDraft.cta}</p> : null}
+              {socialPostDraft?.hashtags.length ? (
+                <p className="hashtags">{socialPostDraft.hashtags.map((tag) => `#${tag}`).join(" ")}</p>
+              ) : null}
+            </div>
+
+            <div className="panel">
+              <h2 className="section-title">Facebook publishing</h2>
+              <div className="stack">
+                <div className="split-row">
+                  <span>META Graph API</span>
+                  <span className={`badge ${facebookConfigured ? "" : "warning"}`}>
+                    {facebookConfigured ? "configured" : "missing"}
+                  </span>
+                </div>
+                <div className="split-row">
+                  <span>Provider post id</span>
+                  <strong>{socialPostDraft?.providerPostId ?? "not published"}</strong>
+                </div>
+                <div className="split-row">
+                  <span>Published at</span>
+                  <strong>{socialPostDraft?.publishedAt ? formatDate(socialPostDraft.publishedAt) : "not published"}</strong>
+                </div>
+                {socialPostDraft?.publishError ? (
+                  <p className="warning-text">{socialPostDraft.publishError}</p>
+                ) : null}
+                {socialPostDraft?.publishLogs.length ? (
+                  <div className="stack">
+                    <strong>Publish attempts</strong>
+                    {socialPostDraft.publishLogs.map((log) => (
+                      <div className="panel subtle" key={log.id}>
+                        <div className="split-row">
+                          <span>{formatDate(log.attemptedAt)}</span>
+                          <span className={`badge ${log.success ? "" : "warning"}`}>
+                            {log.success ? "success" : "failed"}
+                          </span>
+                        </div>
+                        <p className="muted">{log.providerPostId ?? log.error ?? "no provider result"}</p>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+                <FacebookPublishForm
+                  approvalId={item.id}
+                  disabled={publishDisabled}
+                  disabledReason={publishDisabledReason}
+                  returnTo={`/approval-center/${item.id}`}
+                />
+              </div>
+            </div>
+          </section>
+        ) : null}
 
         <section className="panel">
           <div className="split-row">
             <div>
               <h2 className="section-title">إجراءات المراجعة</h2>
               <p className="muted">
-                هذه الأزرار تغيّر حالة المراجعة الداخلية فقط. لا ترسل بريدًا، ولا تنشر منشورات،
-                ولا تتواصل مع العملاء.
+                هذه الأزرار تغيّر حالة المراجعة الداخلية فقط. زر Approve & Publish أعلاه هو مسار نشر فيسبوك
+                الوحيد، ولا يظهر إلا لمسودات فيسبوك.
               </p>
             </div>
           </div>
           <div className="button-row">
-            <DecisionButton approvalId={item.id} decision="approve" label="موافقة" variant="primary" />
+            <DecisionButton approvalId={item.id} decision="approve" label="موافقة فقط" variant="primary" />
             <DecisionButton approvalId={item.id} decision="request_revision" label="طلب تعديل" />
             <DecisionButton approvalId={item.id} decision="reject" label="رفض" variant="warning" />
             <DecisionButton approvalId={item.id} decision="mark_reviewed" label="وضع كمراجع" />

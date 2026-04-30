@@ -616,7 +616,7 @@ export async function getApprovalItemDetail(id: string) {
   }
 
   try {
-    return prisma.approvalItem.findUnique({
+    const item = await prisma.approvalItem.findUnique({
       where: { id },
       include: {
         product: true,
@@ -624,6 +624,34 @@ export async function getApprovalItemDetail(id: string) {
         lead: true
       }
     });
+
+    if (
+      !item ||
+      (item.itemType !== "social_post_draft" && item.itemType !== "content_studio_facebook_post")
+    ) {
+      return item;
+    }
+
+    const socialPostDraft = await prisma.socialPostDraft.findUnique({
+      where: { id: item.itemId },
+      include: {
+        product: true,
+        campaign: true,
+        assets: {
+          orderBy: { createdAt: "desc" },
+          take: 3
+        },
+        publishLogs: {
+          orderBy: { createdAt: "desc" },
+          take: 5
+        }
+      }
+    });
+
+    return {
+      ...item,
+      socialPostDraft
+    };
   } catch {
     return null;
   }

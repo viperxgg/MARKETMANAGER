@@ -26,6 +26,8 @@ enum WorkStatus {
   manually_executed
   tracking
   completed
+  published
+  failed
   sent_manually
   replied
   follow_up_needed
@@ -306,7 +308,30 @@ model SocialPostDraft {
   imageConcept          String
   imagePromptEn         String
   visualAvoid           String[]        @default([])
+  publishedAt           DateTime?
+  provider              String?
+  providerPostId        String?
+  publishError          String?
+  publishAttemptedAt    DateTime?
+  publishAttemptCount   Int             @default(0)
   assets                SocialPostAsset[]
+  publishLogs           PublishLog[]
+}
+
+model PublishLog {
+  id                    String          @id @default(cuid())
+  createdAt             DateTime        @default(now())
+  socialPostDraftId     String
+  socialPostDraft       SocialPostDraft @relation(fields: [socialPostDraftId], references: [id])
+  provider              String
+  attemptedAt           DateTime        @default(now())
+  success               Boolean         @default(false)
+  providerPostId        String?
+  error                 String?
+  messagePreview        String          @default("")
+
+  @@index([socialPostDraftId])
+  @@index([provider])
 }
 
 model SocialPostAsset {

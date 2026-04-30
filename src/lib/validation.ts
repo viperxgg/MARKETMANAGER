@@ -54,6 +54,11 @@ export const approvalDecisionSchema = z.object({
   decision: z.enum(["approve", "request_revision", "reject", "mark_reviewed"])
 });
 
+export const approveAndPublishFacebookSchema = z.object({
+  approvalId: z.string().min(1),
+  returnTo: z.string().min(1).max(300).default("/approval-center")
+});
+
 export const confidenceSchema = z.enum(["unknown", "low", "medium", "high"]);
 
 export const importLeadSchema = z.object({

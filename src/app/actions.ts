@@ -11,7 +11,9 @@ import { ensureProductRecord } from "@/lib/data-service";
 import { importManualCsvLeads } from "@/lib/manual-csv-leads";
 import { openAiTextConfigurationError } from "@/lib/openai-config";
 import { getProduct, products } from "@/lib/product-data";
+import { publishToFacebook } from "@/services/facebook-publisher";
 import {
+  approveAndPublishFacebookSchema,
   campaignBriefSchema,
   agencyBrainRunSchema,
   approvalDecisionSchema,
@@ -1956,6 +1958,169 @@ export async function updateApprovalDecisionAction(formData: FormData) {
   }
 
   notice(`/approval-center/${parsed.data.approvalId}`, `approval-${parsed.data.decision}`);
+}
+
+function buildFacebookMessage(draft: {
+  body: string;
+  cta: string;
+  hashtags: string[];
+}) {
+  const hashtags = draft.hashtags.length > 0 ? draft.hashtags.map((tag) => `#${tag}`).join(" ") : "";
+
+  return [draft.body, draft.cta, hashtags].filter(Boolean).join("\n\n");
+}
+
+export async function approveAndPublishFacebookAction(formData: FormData) {
+  const parsed = approveAndPublishFacebookSchema.safeParse({
+    approvalId: getString(formData, "approvalId"),
+    returnTo: getString(formData, "returnTo") ?? "/approval-center"
+  });
+  const returnTo = safeReturnTo(getString(formData, "returnTo"));
+
+  if (!parsed.success) {
+    notice(returnTo, "invalid");
+  }
+
+  if (!hasDatabaseUrl()) {
+    notice(returnTo, "db-missing");
+  }
+
+  const attemptedAt = new Date();
+
+  try {
+    const item = await prisma.approvalItem.findUnique({
+      where: { id: parsed.data.approvalId }
+    });
+
+    if (
+      !item ||
+      (item.itemType !== "social_post_draft" && item.itemType !== "content_studio_facebook_post")
+    ) {
+      notice(returnTo, "facebook-publish-invalid");
+    }
+
+    const draft = await prisma.socialPostDraft.findUnique({
+      where: { id: item.itemId },
+      include: {
+        assets: {
+          orderBy: { createdAt: "desc" },
+          take: 1
+        }
+      }
+    });
+
+    if (!draft || draft.platform !== "facebook") {
+      notice(returnTo, "facebook-publish-invalid");
+    }
+
+    if (draft.status === "published" || draft.providerPostId) {
+      notice(returnTo, "facebook-already-published");
+    }
+
+    const message = buildFacebookMessage(draft);
+    const imageUrl = draft.assets.find((asset) => asset.imageUrl)?.imageUrl ?? null;
+
+    await prisma.$transaction([
+      prisma.approvalItem.update({
+        where: { id: item.id },
+        data: {
+          approved_by_owner: true,
+          approvedBy: "owner",
+          approvedAt: item.approvedAt ?? attemptedAt,
+          status: "approved_by_owner",
+          finalStatus: "facebook_publish_attempted",
+          manual_execution_required: true
+        }
+      }),
+      prisma.socialPostDraft.update({
+        where: { id: draft.id },
+        data: {
+          approved_by_owner: true,
+          status: "approved_by_owner",
+          publishAttemptedAt: attemptedAt,
+          publishAttemptCount: { increment: 1 },
+          publishError: null
+        }
+      })
+    ]);
+
+    const result = await publishToFacebook({
+      message,
+      imageUrl
+    });
+
+    await prisma.publishLog.create({
+      data: {
+        socialPostDraftId: draft.id,
+        provider: "facebook",
+        attemptedAt,
+        success: result.success,
+        providerPostId: result.postId,
+        error: result.error,
+        messagePreview: message.slice(0, 500)
+      }
+    });
+
+    if (!result.success) {
+      await prisma.$transaction([
+        prisma.socialPostDraft.update({
+          where: { id: draft.id },
+          data: {
+            status: "failed",
+            provider: "facebook",
+            publishError: result.error ?? "Facebook publishing failed",
+            manual_execution_required: true
+          }
+        }),
+        prisma.approvalItem.update({
+          where: { id: item.id },
+          data: {
+            status: "failed",
+            finalStatus: "facebook_publish_failed",
+            manual_execution_required: true,
+            notes: [item.notes, `facebook_publish_error:${result.error ?? "unknown"}`]
+              .filter(Boolean)
+              .join("\n")
+          }
+        })
+      ]);
+
+      notice(returnTo, result.error === "Facebook not configured" ? "facebook-not-configured" : "facebook-publish-failed");
+    }
+
+    await prisma.$transaction([
+      prisma.socialPostDraft.update({
+        where: { id: draft.id },
+        data: {
+          status: "published",
+          publishedAt: new Date(),
+          provider: "facebook",
+          providerPostId: result.postId,
+          publishError: null,
+          manual_execution_required: false
+        }
+      }),
+      prisma.approvalItem.update({
+        where: { id: item.id },
+        data: {
+          status: "published",
+          finalStatus: "published_to_facebook",
+          manual_execution_required: false,
+          notes: [item.notes, `facebook_provider_post_id:${result.postId ?? "unknown"}`]
+            .filter(Boolean)
+            .join("\n")
+        }
+      })
+    ]);
+  } catch (error) {
+    if (error instanceof Error && error.message === "NEXT_REDIRECT") {
+      throw error;
+    }
+
+    notice(returnTo, "facebook-publish-failed");
+  }
+
+  notice(returnTo, "facebook-published");
 }
 
 export async function rejectLiveResearchLeadAction(formData: FormData) {

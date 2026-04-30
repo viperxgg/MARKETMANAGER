@@ -139,6 +139,26 @@ const notices: Record<string, { type: "success" | "warning" | "error"; message: 
     type: "success",
     message: "تم وضع العنصر كمراجع. أي إجراء خارجي لا يزال يحتاج تنفيذًا يدويًا."
   },
+  "facebook-published": {
+    type: "success",
+    message: "Post published to Facebook."
+  },
+  "facebook-not-configured": {
+    type: "warning",
+    message: "Facebook not configured. أضف META_PAGE_ID و META_ACCESS_TOKEN على الخادم، ولم يتم نشر أي شيء."
+  },
+  "facebook-publish-failed": {
+    type: "error",
+    message: "فشل نشر المنشور على فيسبوك. تم حفظ محاولة النشر والنتيجة بدون عرض أي أسرار."
+  },
+  "facebook-publish-invalid": {
+    type: "error",
+    message: "هذا العنصر ليس مسودة فيسبوك قابلة للنشر."
+  },
+  "facebook-already-published": {
+    type: "warning",
+    message: "هذه المسودة منشورة مسبقًا على فيسبوك."
+  },
   "db-missing": {
     type: "warning",
     message: "لم يتم إعداد DATABASE_URL بعد. تم التحقق من الطلب لكنه لم يُحفظ."

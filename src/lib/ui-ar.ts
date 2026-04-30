@@ -11,6 +11,8 @@ export function statusAr(value?: string | null) {
     manually_executed: "نُفّذ يدويًا",
     tracking: "قيد المتابعة",
     completed: "مكتمل",
+    published: "منشور",
+    failed: "فشل",
     sent_manually: "أُرسل يدويًا",
     replied: "تم الرد",
     responded: "تم الرد",
