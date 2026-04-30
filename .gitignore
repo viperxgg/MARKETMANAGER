@@ -1,0 +1,12 @@
+node_modules
+.next
+.vercel
+.env
+.env.local
+.env.*.local
+dist
+coverage
+*.tsbuildinfo
+dev-server.log
+dev-server.err.log
+prisma-studio.log

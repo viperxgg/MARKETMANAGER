@@ -1,0 +1,45 @@
+{
+  "name": "marketmanager",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "postinstall": "prisma generate",
+    "lint": "eslint",
+    "typecheck": "tsc --noEmit",
+    "db:generate": "prisma generate",
+    "db:push": "prisma db push",
+    "db:studio": "prisma studio",
+    "win:dev": "powershell -ExecutionPolicy Bypass -File scripts/windows-env.ps1 dev",
+    "win:build": "powershell -ExecutionPolicy Bypass -File scripts/windows-env.ps1 build",
+    "win:lint": "powershell -ExecutionPolicy Bypass -File scripts/windows-env.ps1 lint",
+    "win:typecheck": "powershell -ExecutionPolicy Bypass -File scripts/windows-env.ps1 typecheck",
+    "win:db:generate": "powershell -ExecutionPolicy Bypass -File scripts/windows-env.ps1 prisma-generate",
+    "win:db:push": "powershell -ExecutionPolicy Bypass -File scripts/windows-env.ps1 prisma-push",
+    "win:db:studio": "powershell -ExecutionPolicy Bypass -File scripts/windows-env.ps1 prisma-studio"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.18.0",
+    "lucide-react": "^0.468.0",
+    "next": "^15.5.15",
+    "react": "^19.2.5",
+    "react-dom": "^19.2.5",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@next/eslint-plugin-next": "^15.5.15",
+    "@types/node": "^22.10.2",
+    "@types/react": "^19.0.1",
+    "@types/react-dom": "^19.0.1",
+    "@typescript-eslint/eslint-plugin": "^8.59.1",
+    "@typescript-eslint/parser": "^8.59.1",
+    "eslint": "^9.17.0",
+    "prisma": "^6.18.0",
+    "typescript": "^5.7.2"
+  },
+  "overrides": {
+    "postcss": "^8.5.10"
+  }
+}

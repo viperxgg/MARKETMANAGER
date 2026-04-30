@@ -1,0 +1,467 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ProductStatus {
+  draft
+  active
+  paused
+  archived
+}
+
+enum WorkStatus {
+  draft
+  strategy_ready
+  leads_ready
+  drafts_ready
+  compliance_review
+  needs_revision
+  owner_review
+  approved_by_owner
+  manually_executed
+  tracking
+  completed
+  sent_manually
+  replied
+  follow_up_needed
+  closed
+  rejected
+  reviewed
+  cancelled
+}
+
+enum Channel {
+  facebook
+  instagram
+  linkedin
+  email
+  manual
+  codex_research
+}
+
+enum LeadStatus {
+  discovered
+  analyzed
+  contact_verified
+  qualified
+  outreach_drafted
+  owner_review
+  approved_for_contact
+  contacted_manually
+  responded
+  converted
+  not_relevant
+  closed
+}
+
+enum ConfidenceLevel {
+  unknown
+  low
+  medium
+  high
+}
+
+enum ReplyStatus {
+  not_sent
+  sent_manually
+  opened_unknown
+  replied_positive
+  replied_neutral
+  replied_negative
+  no_reply
+  follow_up_sent
+  meeting_booked
+  converted
+  closed
+}
+
+enum InterestLevel {
+  low
+  medium
+  high
+}
+
+enum MemoryCategory {
+  winning_messages
+  weak_messages
+  best_segments
+  poor_fit_segments
+  objections
+  successful_ctas
+  bad_ctas
+  visual_styles
+  market_insights
+  compliance_lessons
+  pricing_feedback
+  customer_language
+}
+
+enum ReportType {
+  weekly_campaign_report
+  lead_quality_report
+  outreach_performance_report
+  social_content_report
+  product_positioning_report
+  monthly_learning_report
+}
+
+model Product {
+  id                    String                  @id @default(cuid())
+  createdAt             DateTime                @default(now())
+  updatedAt             DateTime                @updatedAt
+  status                ProductStatus           @default(draft)
+  approved_by_owner     Boolean                 @default(false)
+  manual_execution_required Boolean             @default(true)
+  notes                 String                  @default("")
+  slug                  String                  @unique
+  name                  String
+  aliases               String[]                @default([])
+  shortDescription      String
+  problemSolved         String
+  targetAudience        String
+  benefits              String[]                @default([])
+  features              String[]                @default([])
+  pricePlans            Json
+  sourceUrl             String
+  demoUrl               String?
+  campaigns             Campaign[]
+  leads                 Lead[]
+  outreachDrafts        OutreachDraft[]
+  socialPostDrafts      SocialPostDraft[]
+  dailyRuns             DailyRun[]
+  agencyMemories        AgencyMemory[]
+  experiments           Experiment[]
+  insights              Insight[]
+  reports               Report[]
+  manualTrackingEntries ManualTrackingEntry[]
+  approvalItems         ApprovalItem[]
+}
+
+model Campaign {
+  id                    String                @id @default(cuid())
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime              @updatedAt
+  status                WorkStatus            @default(draft)
+  approved_by_owner     Boolean               @default(false)
+  manual_execution_required Boolean           @default(true)
+  notes                 String                @default("")
+  productId             String
+  product               Product               @relation(fields: [productId], references: [id])
+  name                  String
+  targetSegment         String
+  objective             String
+  channel               Channel
+  startDate             DateTime?
+  endDate               DateTime?
+  hypothesis            String
+  successMetrics        String[]              @default([])
+  lessonsLearned        String[]              @default([])
+  messageAngle          String                @default("")
+  brief                 String                @default("")
+  leads                 Lead[]
+  outreachDrafts        OutreachDraft[]
+  socialPostDrafts      SocialPostDraft[]
+  approvalItems         ApprovalItem[]
+  manualTrackingEntries ManualTrackingEntry[]
+  experiments           Experiment[]
+  agencyMemories        AgencyMemory[]
+  insights              Insight[]
+  reports               Report[]
+}
+
+model Lead {
+  id                    String               @id @default(cuid())
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
+  status                LeadStatus           @default(discovered)
+  approved_by_owner     Boolean              @default(false)
+  manual_execution_required Boolean          @default(true)
+  notes                 String               @default("")
+  productId             String
+  product               Product              @relation(fields: [productId], references: [id])
+  campaignId            String?
+  campaign              Campaign?            @relation(fields: [campaignId], references: [id])
+  companyName           String
+  website               String
+  city                  String
+  country               String               @default("Sweden")
+  industry              String
+  segment               String
+  sourceUrl             String
+  fitScore              Int                  @default(0)
+  confidenceLevel       ConfidenceLevel      @default(unknown)
+  reasonForFit          String
+  officialEmail         String?
+  emailSourceUrl        String?
+  emailConfidence       ConfidenceLevel      @default(unknown)
+  contactStatus         String               @default("not_verified")
+  lastContactedAt       DateTime?
+  followUpDate          DateTime?
+  tags                  String[]             @default([])
+  bestEntryAngle        String               @default("")
+  leadAnalysis          LeadAnalysis?
+  contactVerification   ContactVerification?
+  outreachDrafts        OutreachDraft[]
+  approvalItems         ApprovalItem[]
+  manualTrackingEntries ManualTrackingEntry[]
+}
+
+model LeadAnalysis {
+  id                    String          @id @default(cuid())
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @updatedAt
+  status                WorkStatus      @default(draft)
+  approved_by_owner     Boolean         @default(false)
+  manual_execution_required Boolean     @default(true)
+  notes                 String          @default("")
+  leadId                String          @unique
+  lead                  Lead            @relation(fields: [leadId], references: [id])
+  menuServiceClarity    Int             @default(0)
+  customerJourney       Int             @default(0)
+  mobileExperience      Int             @default(0)
+  bookingContactClarity Int             @default(0)
+  visualClarity         Int             @default(0)
+  trustSignals          Int             @default(0)
+  conversionFriction    String
+  opportunityFraming    String
+  productFitReason      String
+  confidenceLevel       ConfidenceLevel @default(unknown)
+  internalOnly          Boolean         @default(true)
+}
+
+model ContactVerification {
+  id                    String          @id @default(cuid())
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @updatedAt
+  status                WorkStatus      @default(draft)
+  approved_by_owner     Boolean         @default(false)
+  manual_execution_required Boolean     @default(true)
+  notes                 String          @default("")
+  leadId                String          @unique
+  lead                  Lead            @relation(fields: [leadId], references: [id])
+  officialEmail         String
+  emailSourceUrl        String
+  emailSourcePage       String
+  emailConfidence       ConfidenceLevel @default(unknown)
+  isOfficialSource      Boolean         @default(false)
+  verifiedAt            DateTime        @default(now())
+}
+
+model OutreachDraft {
+  id                    String          @id @default(cuid())
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @updatedAt
+  status                WorkStatus      @default(draft)
+  approved_by_owner     Boolean         @default(false)
+  manual_execution_required Boolean     @default(true)
+  notes                 String          @default("")
+  productId             String
+  product               Product         @relation(fields: [productId], references: [id])
+  campaignId            String?
+  campaign              Campaign?       @relation(fields: [campaignId], references: [id])
+  leadId                String?
+  lead                  Lead?           @relation(fields: [leadId], references: [id])
+  company               String
+  subject               String
+  opening               String
+  observation           String
+  opportunity           String
+  productConnection     String
+  softCta               String
+  closing               String
+  language              String          @default("sv")
+  tone                  String          @default("calm professional")
+  complianceChecklist   String[]        @default([])
+  optOutText            String          @default("")
+  bodyPreview           String          @default("")
+}
+
+model SocialPostDraft {
+  id                    String          @id @default(cuid())
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @updatedAt
+  status                WorkStatus      @default(draft)
+  approved_by_owner     Boolean         @default(false)
+  manual_execution_required Boolean     @default(true)
+  notes                 String          @default("")
+  productId             String
+  product               Product         @relation(fields: [productId], references: [id])
+  campaignId            String?
+  campaign              Campaign?       @relation(fields: [campaignId], references: [id])
+  platform              Channel
+  campaignAngle         String
+  audience              String
+  postType              String
+  hook                  String
+  body                  String
+  cta                   String
+  hashtags              String[]        @default([])
+  imageConcept          String
+  imagePromptEn         String
+  visualAvoid           String[]        @default([])
+}
+
+model ApprovalItem {
+  id                    String          @id @default(cuid())
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @updatedAt
+  status                WorkStatus      @default(owner_review)
+  approved_by_owner     Boolean         @default(false)
+  manual_execution_required Boolean     @default(true)
+  notes                 String          @default("")
+  productId             String?
+  product               Product?        @relation(fields: [productId], references: [id])
+  campaignId            String?
+  campaign              Campaign?       @relation(fields: [campaignId], references: [id])
+  leadId                String?
+  lead                  Lead?           @relation(fields: [leadId], references: [id])
+  itemType              String
+  itemId                String
+  contentPreview        String
+  riskWarnings          String[]        @default([])
+  complianceChecklist   String[]        @default([])
+  finalStatus           String          @default("manual_execution_required")
+  approvedBy            String?
+  approvedAt            DateTime?
+}
+
+model ManualTrackingEntry {
+  id                    String          @id @default(cuid())
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @updatedAt
+  status                WorkStatus      @default(draft)
+  approved_by_owner     Boolean         @default(false)
+  manual_execution_required Boolean     @default(true)
+  notes                 String          @default("")
+  productId             String?
+  product               Product?        @relation(fields: [productId], references: [id])
+  campaignId            String?
+  campaign              Campaign?       @relation(fields: [campaignId], references: [id])
+  leadId                String?
+  lead                  Lead?           @relation(fields: [leadId], references: [id])
+  company               String
+  emailSentDate         DateTime?
+  channel               Channel
+  subject               String
+  replyStatus           ReplyStatus     @default(not_sent)
+  replyType             String          @default("")
+  interestLevel         InterestLevel?
+  followUpDate          DateTime?
+  nextAction            String          @default("")
+  outcome               String          @default("")
+  impressions           Int             @default(0)
+  clicks                Int             @default(0)
+  replies               Int             @default(0)
+  meetingsBooked        Int             @default(0)
+  conversions           Int             @default(0)
+}
+
+model DailyRun {
+  id                    String          @id @default(cuid())
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @updatedAt
+  status                WorkStatus      @default(draft)
+  approved_by_owner     Boolean         @default(false)
+  manual_execution_required Boolean     @default(true)
+  notes                 String          @default("")
+  productId             String?
+  product               Product?        @relation(fields: [productId], references: [id])
+  runDate               DateTime        @default(now())
+  summary               String
+  recommendedActions    String[]        @default([])
+  contentNeeded         Boolean         @default(true)
+  leadsNeeded           Boolean         @default(true)
+  warnings              String[]        @default([])
+}
+
+model AgencyMemory {
+  id                    String          @id @default(cuid())
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @updatedAt
+  status                WorkStatus      @default(draft)
+  approved_by_owner     Boolean         @default(false)
+  manual_execution_required Boolean     @default(true)
+  notes                 String          @default("")
+  productId             String?
+  product               Product?        @relation(fields: [productId], references: [id])
+  campaignId            String?
+  campaign              Campaign?       @relation(fields: [campaignId], references: [id])
+  title                 String
+  category              MemoryCategory
+  source                String
+  confidence            Int             @default(60)
+  insight               String
+  recommendation        String
+}
+
+model Experiment {
+  id                    String          @id @default(cuid())
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @updatedAt
+  status                WorkStatus      @default(draft)
+  approved_by_owner     Boolean         @default(false)
+  manual_execution_required Boolean     @default(true)
+  notes                 String          @default("")
+  productId             String
+  product               Product         @relation(fields: [productId], references: [id])
+  campaignId            String?
+  campaign              Campaign?       @relation(fields: [campaignId], references: [id])
+  hypothesis            String
+  segment               String
+  channel               Channel
+  testSize              Int             @default(0)
+  variantA              String
+  variantB              String
+  metric                String
+  result                String          @default("")
+  conclusion            String          @default("")
+  nextAction            String          @default("")
+}
+
+model Insight {
+  id                    String          @id @default(cuid())
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @updatedAt
+  status                WorkStatus      @default(draft)
+  approved_by_owner     Boolean         @default(false)
+  manual_execution_required Boolean     @default(true)
+  notes                 String          @default("")
+  productId             String?
+  product               Product?        @relation(fields: [productId], references: [id])
+  campaignId            String?
+  campaign              Campaign?       @relation(fields: [campaignId], references: [id])
+  title                 String
+  source                String
+  confidence            Int             @default(60)
+  insight               String
+  recommendation        String
+}
+
+model Report {
+  id                    String          @id @default(cuid())
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @updatedAt
+  status                WorkStatus      @default(draft)
+  approved_by_owner     Boolean         @default(false)
+  manual_execution_required Boolean     @default(true)
+  notes                 String          @default("")
+  productId             String?
+  product               Product?        @relation(fields: [productId], references: [id])
+  campaignId            String?
+  campaign              Campaign?       @relation(fields: [campaignId], references: [id])
+  type                  ReportType
+  title                 String
+  summary               String
+  whatWasDone           String[]        @default([])
+  numbers               Json
+  whatWorked            String[]        @default([])
+  whatDidNotWork        String[]        @default([])
+  recommendations       String[]        @default([])
+  nextWeekPlan          String[]        @default([])
+  markdown              String
+}
