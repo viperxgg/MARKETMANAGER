@@ -8,10 +8,12 @@ export const dynamic = "force-dynamic";
 export default async function ManualTrackingPage({
   searchParams
 }: {
-  searchParams: Promise<{ notice?: string; product?: string }>;
+  searchParams: Promise<{ notice?: string; product?: string; showDismissed?: string }>;
 }) {
   const params = await searchParams;
-  const data = await getOperatingData(normalizeProductFilter(params.product));
+  const data = await getOperatingData(normalizeProductFilter(params.product), {
+    showDismissed: params.showDismissed === "1"
+  });
 
   return (
     <AppShell>

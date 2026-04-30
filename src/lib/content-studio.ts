@@ -290,54 +290,6 @@ function fallbackFacebookPost(
   });
 }
 
-async function maybeGenerateImage(output: FacebookContentStudioOutput) {
-  const apiKey = process.env.OPENAI_API_KEY;
-  const model = process.env.OPENAI_IMAGE_MODEL || process.env.IMAGE_GENERATION_MODEL;
-
-  if (!apiKey || !model) {
-    return output;
-  }
-
-  const response = await fetch("https://api.openai.com/v1/images/generations", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      model,
-      prompt: output.imagePrompt,
-      size: "1024x1024",
-      n: 1
-    })
-  });
-
-  if (!response.ok) {
-    return {
-      ...output,
-      warnings: [...output.warnings, "Image generation was configured but did not complete."]
-    };
-  }
-
-  const payload = await response.json();
-  const imageUrl = payload?.data?.[0]?.url;
-
-  if (typeof imageUrl !== "string") {
-    return {
-      ...output,
-      warnings: [
-        ...output.warnings,
-        "Image generation completed without a hosted image URL; no image was stored."
-      ]
-    };
-  }
-
-  return facebookContentStudioOutputSchema.parse({
-    ...output,
-    imageUrl
-  });
-}
-
 export function parseContentStudioNotes(notes: string) {
   if (!notes.startsWith(notesPrefix)) {
     return null;
@@ -375,8 +327,6 @@ export async function generateFacebookPostForProduct(input: { productSlug: Produ
     requiresApproval: true
   });
 
-  assertProductSeparation(output);
-  output = await maybeGenerateImage(output);
   assertProductSeparation(output);
 
   const draft = await prisma.socialPostDraft.create({

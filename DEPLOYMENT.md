@@ -40,6 +40,9 @@ OPENAI_API_KEY=
 OPENAI_MODEL=gpt-4.1-mini
 LEAD_SEARCH_PROVIDER=manual-csv
 LEAD_SEARCH_API_KEY=
+OPENAI_IMAGE_MODEL=
+IMAGE_STORAGE_PROVIDER=
+IMAGE_STORAGE_BUCKET=
 ```
 
 ### DATABASE_URL
@@ -100,6 +103,18 @@ LEAD_SEARCH_PROVIDER=manual-csv
 ```
 
 Only set this when a real live search provider adapter is implemented and reviewed.
+
+### OPENAI_IMAGE_MODEL
+
+Optional for staging. Leave blank until image generation is ready to test.
+
+When blank, the UI shows a safe missing-configuration message and does not create a fake image.
+
+### IMAGE_STORAGE_PROVIDER / IMAGE_STORAGE_BUCKET
+
+Optional placeholders for later persistent image storage.
+
+Generated image metadata is stored as a draft asset linked to the Facebook post draft. Do not configure a storage provider until it is implemented and reviewed.
 
 ## Safe Missing-Integration Behavior
 

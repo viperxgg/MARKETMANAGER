@@ -18,10 +18,12 @@ export default async function ProductPage({
   searchParams
 }: {
   params: Promise<{ slug: string }>;
-  searchParams: Promise<{ notice?: string }>;
+  searchParams: Promise<{ notice?: string; showDismissed?: string }>;
 }) {
   const [{ slug }, query] = await Promise.all([params, searchParams]);
-  const data = await getProductWorkspace(slug);
+  const data = await getProductWorkspace(slug, {
+    showDismissed: query.showDismissed === "1"
+  });
 
   if (!data) {
     notFound();
@@ -34,4 +36,3 @@ export default async function ProductPage({
     </AppShell>
   );
 }
-

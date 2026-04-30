@@ -7,16 +7,19 @@ import {
   createReportAction,
   createSocialDraftAction,
   createWebsiteAnalysisAction,
+  generateFacebookImageAction,
   generateFacebookPostAction,
   importResearchedLeadAction,
   recordManualMetricAction
 } from "@/app/actions";
 import { getOperatingData } from "@/lib/data-service";
+import { parseContentStudioNotes } from "@/lib/content-studio";
 import { getLeadSearchProviderStatus } from "@/lib/lead-search-provider";
 import { products } from "@/lib/product-data";
 import { getLeadScoringRules } from "@/lib/scoring";
-import { channelAr, scopeAr, statusAr } from "@/lib/ui-ar";
+import { channelAr, duplicateRiskAr, scopeAr, statusAr } from "@/lib/ui-ar";
 import { Icons } from "./icons";
+import { DismissCardButton, ShowDismissedToggle } from "./dismiss-card";
 import { SectionPage } from "./section-page";
 
 type OperatingData = Awaited<ReturnType<typeof getOperatingData>>;
@@ -207,6 +210,37 @@ function EmptyAction({ text, href, label }: { text: string; href: string; label:
         {label}
       </Link>
     </div>
+  );
+}
+
+function compactText(value: string, max = 320) {
+  const text = String(value ?? "").replace(/\s+/g, " ").trim();
+
+  if (text.length <= max) {
+    return text;
+  }
+
+  return `${text.slice(0, max).trim()}...`;
+}
+
+function facebookImageStatus(asset: AnyRecord | undefined, imageGenerationConfigured: boolean) {
+  if (asset?.imageUrl || asset?.storedImageReference) {
+    return { label: "Image draft ready", className: "badge" };
+  }
+
+  if (!imageGenerationConfigured) {
+    return { label: "Image generation unavailable", className: "badge warning" };
+  }
+
+  return { label: "No image", className: "badge warning" };
+}
+
+function DraftMetaItem({ label, value }: { label: string; value: string }) {
+  return (
+    <span>
+      <strong>{label}</strong>
+      {value}
+    </span>
   );
 }
 
@@ -757,6 +791,13 @@ export function OutreachOperatingPage({ data }: { data: OperatingData }) {
 export function SocialOperatingPage({ data }: { data: OperatingData }) {
   const campaigns = data.campaigns as AnyRecord[];
   const posts = data.socialPostDrafts as AnyRecord[];
+  const imageGenerationConfigured = Boolean(
+    process.env.OPENAI_API_KEY && (process.env.OPENAI_IMAGE_MODEL || process.env.IMAGE_GENERATION_MODEL)
+  );
+  const filterQuery =
+    data.productFilter !== "all" ? `?product=${data.productFilter}` : "";
+  const basePath = `/social-studio${filterQuery}`;
+  const returnTo = `${basePath}${data.showDismissed ? `${basePath.includes("?") ? "&" : "?"}showDismissed=1` : ""}`;
   const selectedProduct =
     data.productFilter !== "all" && data.productFilter !== "global"
       ? products.find((product) => product.slug === data.productFilter)
@@ -769,6 +810,15 @@ export function SocialOperatingPage({ data }: { data: OperatingData }) {
       description="ابدأ باختيار منتج. التوليد الذكي متاح فقط داخل سياق منتج محدد، وكل الناتج يبقى مسودة للمراجعة."
     >
       <ProductScopeFilter data={data} basePath="/social-studio" />
+      <section className="panel subtle">
+        <div className="split-row">
+          <div>
+            <strong>مكان ثانوي للعمل</strong>
+            <p className="muted">الأفضل أن تبدأ من صفحة المنتجات، ثم مساحة عمل المنتج. هذا الاستوديو لعرض وتنظيف المسودات.</p>
+          </div>
+          <ShowDismissedToggle basePath={basePath} showDismissed={data.showDismissed} />
+        </div>
+      </section>
       {!selectedProduct ? (
         <section className="notice warning">
           اختر منتجًا أولًا لإنشاء محتوى جديد. عند عرض كل المنتجات، يعرض الاستوديو المسودات الموجودة فقط ولا يشغّل توليدًا.
@@ -776,9 +826,10 @@ export function SocialOperatingPage({ data }: { data: OperatingData }) {
       ) : (
         <section className="grid two">
           <div className="panel">
-            <h2 className="section-title">AI Product Draft</h2>
+            <h2 className="section-title">مسودة منتج بالذكاء الاصطناعي</h2>
             <p className="muted">
               يستخدم سياق {selectedProduct.name} فقط لإنشاء منشور فيسبوك سويدي كمسودة وإرساله للموافقة.
+              توليد الصورة خطوة منفصلة بعد حفظ المسودة.
             </p>
             <form action={generateFacebookPostAction} className="stack">
               <input name="productSlug" type="hidden" value={selectedProduct.slug} />
@@ -795,7 +846,7 @@ export function SocialOperatingPage({ data }: { data: OperatingData }) {
           </div>
 
           <div className="panel">
-            <h2 className="section-title">Manual Draft</h2>
+            <h2 className="section-title">مسودة يدوية</h2>
             <form action={createSocialDraftAction} className="stack">
               <input name="productSlug" type="hidden" value={selectedProduct.slug} />
               <div className="form-grid">
@@ -873,26 +924,68 @@ export function SocialOperatingPage({ data }: { data: OperatingData }) {
           <p className="muted">لا توجد مسودات اجتماعية بعد.</p>
         ) : (
           <div className="stack">
-            {posts.map((post) => (
-              <div className="panel subtle" key={post.id}>
-                <div className="split-row">
-                  <strong>{post.campaignAngle || post.hook}</strong>
-                  <span className="badge warning">{statusAr(post.status)}</span>
-                </div>
-                <div className="meta-grid">
-                  <span>المنتج: {post.product?.name ?? "غير محدد"}</span>
-                  <span>المنصة: {channelAr(post.platform)}</span>
-                  <span>اللغة: {post.language ?? "غير محددة"}</span>
-                  <span>خطر التكرار: غير محدد</span>
-                  <span>الموافقة: {post.approved_by_owner ? "معتمد" : "بانتظار مراجعة المالك"}</span>
-                </div>
-                <p className="muted">{post.body}</p>
-                <Link className="button secondary" href={`/social-studio/${post.id}`}>
-                  <Icons.megaphone size={18} />
-                  معاينة المسودة
-                </Link>
-              </div>
-            ))}
+            {posts.map((post) => {
+              const output = parseContentStudioNotes(post.notes ?? "");
+              const asset = post.assets?.[0];
+              const imageStatus = facebookImageStatus(asset, imageGenerationConfigured);
+
+              return (
+                  <div className={`panel subtle draft-card ${post._dismissed ? "dismissed-card" : ""}`} key={post.id}>
+                    <div className="draft-card-header">
+                      <div>
+                        <strong>{post.campaignAngle || post.hook}</strong>
+                        <p className="muted">{post.product?.name ?? "غير محدد"}</p>
+                      </div>
+                      <DismissCardButton
+                        itemId={post.id}
+                        itemType="social_post_draft"
+                        productSlug={post.product?.slug}
+                        returnTo={returnTo}
+                        isDismissed={post._dismissed}
+                      />
+                    </div>
+                    <div className="draft-card-meta">
+                      <DraftMetaItem label="المنصة: " value={channelAr(post.platform)} />
+                      <DraftMetaItem label="اللغة: " value={output?.language ?? "غير محددة"} />
+                      <DraftMetaItem label="خطر التكرار: " value={duplicateRiskAr(output?.duplicateRisk) || "غير محدد"} />
+                      <DraftMetaItem label="الموافقة: " value={post.approved_by_owner ? "معتمد" : "بانتظار مراجعة المالك"} />
+                      <span className="badge warning">{statusAr(post.status)}</span>
+                      <span className={imageStatus.className}>{imageStatus.label}</span>
+                    </div>
+                    <p className="draft-card-body">{compactText(post.body)}</p>
+                    {asset?.imageUrl || asset?.storedImageReference ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        alt="Facebook draft asset"
+                        className="draft-image-preview"
+                        src={asset.imageUrl ?? asset.storedImageReference}
+                      />
+                    ) : null}
+                    <div className="draft-card-actions">
+                      <Link className="button secondary compact" href={`/social-studio/${post.id}`}>
+                        <Icons.megaphone size={18} />
+                        معاينة المسودة
+                      </Link>
+                      {post.product?.slug ? (
+                        <Link className="button secondary compact" href={`/products/${post.product.slug}`}>
+                          <Icons.file size={18} />
+                          فتح مساحة المنتج
+                        </Link>
+                      ) : null}
+                      {post.platform === "facebook" ? (
+                        <form action={generateFacebookImageAction}>
+                          <input name="socialPostDraftId" type="hidden" value={post.id} />
+                          <input name="returnTo" type="hidden" value={returnTo} />
+                          <button className="button secondary compact" type="submit">
+                            <Icons.image size={18} />
+                            توليد صورة فيسبوك
+                          </button>
+                        </form>
+                      ) : null}
+                    </div>
+                  </div>
+              );
+            })}
           </div>
         )}
       </section>
@@ -902,6 +995,10 @@ export function SocialOperatingPage({ data }: { data: OperatingData }) {
 
 export function ApprovalOperatingPage({ data }: { data: OperatingData }) {
   const approvals = data.approvalItems as AnyRecord[];
+  const filterQuery =
+    data.productFilter !== "all" ? `?product=${data.productFilter}` : "";
+  const basePath = `/approval-center${filterQuery}`;
+  const returnTo = `${basePath}${data.showDismissed ? `${basePath.includes("?") ? "&" : "?"}showDismissed=1` : ""}`;
   const groupedApprovals = approvals.reduce<Record<string, AnyRecord[]>>((groups, item) => {
     const key = `${item.product?.name ?? "عام"} / ${item.itemType} / ${statusAr(item.status)}`;
     groups[key] = [...(groups[key] ?? []), item];
@@ -915,6 +1012,15 @@ export function ApprovalOperatingPage({ data }: { data: OperatingData }) {
       description="راجع البريد والمنشورات والحملات والعملاء ووصف الصور والتقارير قبل التنفيذ اليدوي."
     >
       <ProductScopeFilter data={data} basePath="/approval-center" />
+      <section className="panel subtle">
+        <div className="split-row">
+          <div>
+            <strong>فلترة البطاقات</strong>
+            <p className="muted">الإخفاء بصري فقط ولا يحذف سجل الموافقة أو التاريخ.</p>
+          </div>
+          <ShowDismissedToggle basePath={basePath} showDismissed={data.showDismissed} />
+        </div>
+      </section>
       <section className="panel">
         <h2 className="section-title">بوابة المراجعة النهائية</h2>
         {approvals.length === 0 ? (
@@ -929,10 +1035,19 @@ export function ApprovalOperatingPage({ data }: { data: OperatingData }) {
                 </div>
                 <div className="stack">
                   {items.map((item) => (
-                    <div className="panel" key={item.id}>
+                    <div className={`panel ${item._dismissed ? "dismissed-card" : ""}`} key={item.id}>
                   <div className="split-row">
                     <strong>{item.itemType}</strong>
-                    <span className="badge warning">{statusAr(item.status)}</span>
+                    <div className="button-row">
+                      <span className="badge warning">{statusAr(item.status)}</span>
+                      <DismissCardButton
+                        itemId={item.id}
+                        itemType="approval_item"
+                        productSlug={item.product?.slug}
+                        returnTo={returnTo}
+                        isDismissed={item._dismissed}
+                      />
+                    </div>
                   </div>
                   <p className="muted">المنتج: {item.product?.name ?? "عام"}</p>
                   <p>{item.contentPreview}</p>

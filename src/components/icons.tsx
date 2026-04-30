@@ -6,6 +6,7 @@ import {
   ClipboardList,
   FlaskConical,
   FileText,
+  Image,
   Mail,
   Megaphone,
   Play,
@@ -13,7 +14,8 @@ import {
   Search,
   ShieldCheck,
   Sparkles,
-  Target
+  Target,
+  X
 } from "lucide-react";
 
 export const Icons = {
@@ -25,11 +27,13 @@ export const Icons = {
   clipboard: ClipboardList,
   experiments: FlaskConical,
   file: FileText,
+  image: Image,
   mail: Mail,
   megaphone: Megaphone,
   play: Play,
   settings: Settings,
   search: Search,
   sparkles: Sparkles,
-  target: Target
+  target: Target,
+  x: X
 };

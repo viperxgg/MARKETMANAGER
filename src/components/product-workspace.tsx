@@ -1,7 +1,8 @@
 import Link from "next/link";
-import { generateFacebookPostAction } from "@/app/actions";
+import { generateFacebookImageAction, generateFacebookPostAction } from "@/app/actions";
 import { parseContentStudioNotes } from "@/lib/content-studio";
 import { channelAr, duplicateRiskAr, statusAr } from "@/lib/ui-ar";
+import { DismissCardButton, ShowDismissedToggle } from "./dismiss-card";
 import { Icons } from "./icons";
 import { SubmitButton } from "./submit-button";
 
@@ -20,6 +21,8 @@ function EmptyState({ text }: { text: string }) {
 
 export function ProductWorkspace({ data }: { data: ProductWorkspaceData }) {
   const { product, providerStatus } = data;
+  const imageModelConfigured = Boolean(process.env.OPENAI_IMAGE_MODEL || process.env.IMAGE_GENERATION_MODEL);
+  const returnTo = `/products/${product.slug}${data.showDismissed ? "?showDismissed=1" : ""}`;
   const generatedPosts = data.recentPosts
     .map((post: any) => ({ post, output: parseContentStudioNotes(post.notes) }))
     .filter((item: any) => item.output);
@@ -28,6 +31,9 @@ export function ProductWorkspace({ data }: { data: ProductWorkspaceData }) {
     !providerStatus.providerConfigured ? "مزوّد بحث العملاء غير مضبوط: لن يتم إنشاء عملاء وهميين." : "",
     providerStatus.providerConfigured && !providerStatus.providerImplemented
       ? "مزوّد البحث مضبوط لكن لا يوجد محوّل حي مطبّق بعد."
+      : "",
+    !imageModelConfigured
+      ? "نموذج توليد الصور غير مضبوط: زر توليد صورة فيسبوك سيعرض حالة آمنة بدون إنشاء صورة وهمية."
       : ""
   ].filter(Boolean);
 
@@ -50,6 +56,16 @@ export function ProductWorkspace({ data }: { data: ProductWorkspaceData }) {
         </Link>
       </div>
 
+      <section className="panel subtle">
+        <div className="split-row">
+          <div>
+            <strong>المسار الأساسي</strong>
+            <p className="muted">المنتجات → مساحة عمل المنتج → إجراء → مسودة → مركز الموافقات → تنفيذ يدوي لاحقًا</p>
+          </div>
+          <ShowDismissedToggle basePath={`/products/${product.slug}`} showDismissed={data.showDismissed} />
+        </div>
+      </section>
+
       <section className="grid three">
         <div className="panel stat">
           <span className="muted">الحملات النشطة</span>
@@ -60,8 +76,29 @@ export function ProductWorkspace({ data }: { data: ProductWorkspaceData }) {
           <span className="stat-value">{data.approvalItems.length}</span>
         </div>
         <div className="panel stat">
-          <span className="muted">مسودات حديثة</span>
+          <span className="muted">مسودات حديثة ظاهرة</span>
           <span className="stat-value">{data.recentPosts.length + data.recentOutreachDrafts.length}</span>
+        </div>
+      </section>
+
+      <section className="grid three">
+        <div className="panel subtle">
+          <strong>OpenAI للنص</strong>
+          <p className={providerStatus.openAiConfigured ? "muted" : "warning-text"}>
+            {providerStatus.openAiConfigured ? "مضبوط للتوليد والتحليل" : "غير موجود"}
+          </p>
+        </div>
+        <div className="panel subtle">
+          <strong>OpenAI للصور</strong>
+          <p className={imageModelConfigured ? "muted" : "warning-text"}>
+            {imageModelConfigured ? "مضبوط لتوليد صور فيسبوك عند الطلب" : "غير موجود"}
+          </p>
+        </div>
+        <div className="panel subtle">
+          <strong>مزوّد العملاء</strong>
+          <p className={providerStatus.providerConfigured ? "muted" : "warning-text"}>
+            {providerStatus.providerName} - {providerStatus.providerConfigured ? "مضبوط" : "غير موجود"}
+          </p>
         </div>
       </section>
 
@@ -100,6 +137,10 @@ export function ProductWorkspace({ data }: { data: ProductWorkspaceData }) {
             <Icons.mail size={18} />
             إنشاء بريد تواصل
           </Link>
+          <Link className="button secondary" href={`/agency-brain?scope=${product.slug}`}>
+            <Icons.brain size={18} />
+            تشغيل استراتيجية
+          </Link>
           <Link className="button secondary" href={`/approval-center?product=${product.slug}`}>
             <Icons.approval size={18} />
             مراجعة الموافقات
@@ -128,6 +169,14 @@ export function ProductWorkspace({ data }: { data: ProductWorkspaceData }) {
               </ul>
             </div>
             <div>
+              <strong>الميزات الأساسية</strong>
+              <ul className="list bullets">
+                {product.features.slice(0, 5).map((feature) => (
+                  <li key={feature}>{feature}</li>
+                ))}
+              </ul>
+            </div>
+            <div>
               <strong>زوايا محتوى آمنة</strong>
               <div className="button-row">
                 {product.contentAngles.slice(0, 4).map((angle) => (
@@ -147,10 +196,19 @@ export function ProductWorkspace({ data }: { data: ProductWorkspaceData }) {
           ) : (
             <div className="stack">
               {data.recentCampaigns.slice(0, 4).map((campaign: any) => (
-                <div className="panel subtle" key={campaign.id}>
+                <div className={`panel subtle ${campaign._dismissed ? "dismissed-card" : ""}`} key={campaign.id}>
                   <div className="split-row">
                     <strong>{campaign.name}</strong>
-                    <span className="badge warning">{statusAr(campaign.status)}</span>
+                    <div className="button-row">
+                      <span className="badge warning">{statusAr(campaign.status)}</span>
+                      <DismissCardButton
+                        itemId={campaign.id}
+                        itemType="campaign"
+                        productSlug={product.slug}
+                        returnTo={returnTo}
+                        isDismissed={campaign._dismissed}
+                      />
+                    </div>
                   </div>
                   <p className="muted">{channelAr(campaign.channel)} - {formatDate(campaign.createdAt)}</p>
                   <Link className="button secondary compact" href={`/campaigns/${campaign.id}`}>
@@ -174,21 +232,51 @@ export function ProductWorkspace({ data }: { data: ProductWorkspaceData }) {
                 const generated = generatedPosts.find((item: any) => item.post.id === post.id)?.output;
 
                 return (
-                  <div className="panel subtle" key={post.id}>
+                  <div className={`panel subtle ${post._dismissed ? "dismissed-card" : ""}`} key={post.id}>
                     <div className="split-row">
                       <strong>{generated?.contentAngle ?? post.hook}</strong>
-                      <span className="badge warning">{statusAr(post.status)}</span>
+                      <div className="button-row">
+                        <span className="badge warning">{statusAr(post.status)}</span>
+                        <DismissCardButton
+                          itemId={post.id}
+                          itemType="social_post_draft"
+                          productSlug={product.slug}
+                          returnTo={returnTo}
+                          isDismissed={post._dismissed}
+                        />
+                      </div>
                     </div>
                     <div className="meta-grid">
                       <span>{product.name}</span>
                       <span>{channelAr(post.platform)}</span>
                       <span>اللغة: {generated?.language ?? "غير محددة"}</span>
                       <span>خطر التكرار: {duplicateRiskAr(generated?.duplicateRisk) || "غير محدد"}</span>
+                      <span>أصول الصور: {post.assets?.length ?? 0}</span>
                     </div>
                     <p className="muted">{post.body}</p>
-                    <Link className="button secondary compact" href={`/social-studio/${post.id}`}>
-                      معاينة المسودة
-                    </Link>
+                    {post.assets?.[0]?.imageUrl || post.assets?.[0]?.storedImageReference ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        alt="Facebook draft asset"
+                        className="draft-image-preview"
+                        src={post.assets[0].imageUrl ?? post.assets[0].storedImageReference}
+                      />
+                    ) : null}
+                    <div className="button-row">
+                      <Link className="button secondary compact" href={`/social-studio/${post.id}`}>
+                        معاينة المسودة
+                      </Link>
+                      {post.platform === "facebook" ? (
+                        <form action={generateFacebookImageAction}>
+                          <input name="socialPostDraftId" type="hidden" value={post.id} />
+                          <input name="returnTo" type="hidden" value={returnTo} />
+                          <SubmitButton pendingLabel="جارٍ توليد صورة فيسبوك...">
+                            <Icons.image size={16} />
+                            توليد صورة فيسبوك
+                          </SubmitButton>
+                        </form>
+                      ) : null}
+                    </div>
                   </div>
                 );
               })}
@@ -203,10 +291,19 @@ export function ProductWorkspace({ data }: { data: ProductWorkspaceData }) {
           ) : (
             <div className="stack">
               {data.recentOutreachDrafts.map((draft: any) => (
-                <div className="panel subtle" key={draft.id}>
+                <div className={`panel subtle ${draft._dismissed ? "dismissed-card" : ""}`} key={draft.id}>
                   <div className="split-row">
                     <strong>{draft.company}</strong>
-                    <span className="badge warning">{statusAr(draft.status)}</span>
+                    <div className="button-row">
+                      <span className="badge warning">{statusAr(draft.status)}</span>
+                      <DismissCardButton
+                        itemId={draft.id}
+                        itemType="outreach_draft"
+                        productSlug={product.slug}
+                        returnTo={returnTo}
+                        isDismissed={draft._dismissed}
+                      />
+                    </div>
                   </div>
                   <p className="muted">{draft.subject}</p>
                   <Link className="button secondary compact" href={`/outreach-studio/${draft.id}`}>
@@ -227,10 +324,19 @@ export function ProductWorkspace({ data }: { data: ProductWorkspaceData }) {
           ) : (
             <div className="stack">
               {data.recentLeads.map((lead: any) => (
-                <div className="panel subtle" key={lead.id}>
+                <div className={`panel subtle ${lead._dismissed ? "dismissed-card" : ""}`} key={lead.id}>
                   <div className="split-row">
                     <strong>{lead.companyName}</strong>
-                    <span className="badge">{lead.fitScore}%</span>
+                    <div className="button-row">
+                      <span className="badge">{lead.fitScore}%</span>
+                      <DismissCardButton
+                        itemId={lead.id}
+                        itemType="lead"
+                        productSlug={product.slug}
+                        returnTo={returnTo}
+                        isDismissed={lead._dismissed}
+                      />
+                    </div>
                   </div>
                   <p className="muted">{lead.bestEntryAngle || lead.reasonForFit}</p>
                   <Link className="button secondary compact" href={`/leads/${lead.id}`}>
@@ -252,10 +358,19 @@ export function ProductWorkspace({ data }: { data: ProductWorkspaceData }) {
               ) : (
                 <div className="stack">
                   {data.memoryInsights.slice(0, 3).map((memory: any) => (
-                    <div className="panel subtle" key={memory.id}>
+                    <div className={`panel subtle ${memory._dismissed ? "dismissed-card" : ""}`} key={memory.id}>
                       <div className="split-row">
                         <strong>{memory.title}</strong>
-                        <span className="badge">{memory.confidence}%</span>
+                        <div className="button-row">
+                          <span className="badge">{memory.confidence}%</span>
+                          <DismissCardButton
+                            itemId={memory.id}
+                            itemType="agency_memory"
+                            productSlug={product.slug}
+                            returnTo={returnTo}
+                            isDismissed={memory._dismissed}
+                          />
+                        </div>
                       </div>
                       <p className="muted">{memory.insight}</p>
                     </div>
@@ -270,10 +385,19 @@ export function ProductWorkspace({ data }: { data: ProductWorkspaceData }) {
               ) : (
                 <div className="stack">
                   {data.approvalItems.slice(0, 3).map((item: any) => (
-                    <div className="panel subtle" key={item.id}>
+                    <div className={`panel subtle ${item._dismissed ? "dismissed-card" : ""}`} key={item.id}>
                       <div className="split-row">
                         <strong>{item.itemType}</strong>
-                        <span className="badge warning">{statusAr(item.status)}</span>
+                        <div className="button-row">
+                          <span className="badge warning">{statusAr(item.status)}</span>
+                          <DismissCardButton
+                            itemId={item.id}
+                            itemType="approval_item"
+                            productSlug={product.slug}
+                            returnTo={returnTo}
+                            isDismissed={item._dismissed}
+                          />
+                        </div>
                       </div>
                       <p className="muted">{item.contentPreview}</p>
                       <Link className="button secondary compact" href={`/approval-center/${item.id}`}>

@@ -465,7 +465,23 @@ export function ReportsSection() {
   );
 }
 
-export function SettingsSection({ databaseStatus }: { databaseStatus: DatabaseStatus }) {
+export function SettingsSection({
+  databaseStatus,
+  integrationStatus
+}: {
+  databaseStatus: DatabaseStatus;
+  integrationStatus: {
+    openAiTextConfigured: boolean;
+    openAiImageConfigured: boolean;
+    imageStorageConfigured: boolean;
+    leadProviderStatus: {
+      providerName: string;
+      providerConfigured: boolean;
+      providerImplemented: boolean;
+      openAiConfigured: boolean;
+    };
+  };
+}) {
   const connected = databaseStatus.state === "connected";
 
   return (
@@ -485,16 +501,42 @@ export function SettingsSection({ databaseStatus }: { databaseStatus: DatabaseSt
               </span>
             </div>
             <div className="split-row">
-              <span>حالة المصادقة</span>
-              <span className="badge warning">قيد التنفيذ</span>
+              <span>OpenAI text model</span>
+              <span className={`badge ${integrationStatus.openAiTextConfigured ? "" : "warning"}`}>
+                {integrationStatus.openAiTextConfigured ? "مضبوط" : "غير موجود"}
+              </span>
+            </div>
+            <div className="split-row">
+              <span>OpenAI image model</span>
+              <span className={`badge ${integrationStatus.openAiImageConfigured ? "" : "warning"}`}>
+                {integrationStatus.openAiImageConfigured ? "مضبوط" : "غير موجود"}
+              </span>
+            </div>
+            <div className="split-row">
+              <span>مزوّد بحث العملاء</span>
+              <span className={`badge ${integrationStatus.leadProviderStatus.providerConfigured ? "" : "warning"}`}>
+                {integrationStatus.leadProviderStatus.providerConfigured ? "مضبوط" : "غير موجود"}
+              </span>
+            </div>
+            <div className="split-row">
+              <span>محوّل بحث العملاء</span>
+              <span className={`badge ${integrationStatus.leadProviderStatus.providerImplemented ? "" : "warning"}`}>
+                {integrationStatus.leadProviderStatus.providerImplemented ? "مطبّق" : "غير مطبّق"}
+              </span>
+            </div>
+            <div className="split-row">
+              <span>تخزين الصور</span>
+              <span className={`badge ${integrationStatus.imageStorageConfigured ? "" : "warning"}`}>
+                {integrationStatus.imageStorageConfigured ? "مضبوط" : "غير موجود"}
+              </span>
             </div>
             <div className="split-row">
               <span>مزوّد البريد</span>
-              <span className="badge warning">معطل</span>
+              <span className="badge warning">غير متصل بعد</span>
             </div>
             <div className="split-row">
               <span>واجهات التواصل الاجتماعي</span>
-              <span className="badge warning">معطلة</span>
+              <span className="badge warning">غير متصلة بعد</span>
             </div>
             <div className="split-row">
               <span>الوضع اليدوي</span>
@@ -505,7 +547,7 @@ export function SettingsSection({ databaseStatus }: { databaseStatus: DatabaseSt
         </div>
         <div className="panel">
           <h2 className="section-title">تحذير</h2>
-          <p>الإرسال والنشر المباشران معطلان. التنفيذ يدوي فقط.</p>
+          <p>الإرسال والنشر المباشران معطلان. التنفيذ يدوي فقط. لا تظهر أي قيم سرية في هذه الصفحة.</p>
           <form action={createPersistenceSmokeTestAction} className="stack">
             <div className="field">
               <label htmlFor="smokeProductSlug">المنتج</label>

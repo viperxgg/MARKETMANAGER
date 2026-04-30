@@ -240,6 +240,34 @@ export const facebookContentStudioOutputSchema = z.object({
 
 export type FacebookContentStudioOutput = z.infer<typeof facebookContentStudioOutputSchema>;
 
+export const facebookImageAssetOutputSchema = z.object({
+  socialPostDraftId: z.string().min(1),
+  productSlug: productSlugSchema,
+  platform: z.literal("facebook"),
+  imagePrompt: z.string().min(10).max(2000),
+  imageModel: z.string().min(2).max(120),
+  imageUrl: z.string().max(50000).nullable(),
+  storedImageReference: z.string().max(50000).nullable(),
+  status: z.literal("draft"),
+  requiresApproval: z.literal(true),
+  warnings: z.array(z.string().min(2).max(500)).max(10)
+});
+
+export type FacebookImageAssetOutput = z.infer<typeof facebookImageAssetOutputSchema>;
+
+export const dismissCardSchema = z.object({
+  itemType: z.string().min(2).max(120),
+  itemId: z.string().min(1).max(260),
+  productSlug: productSlugSchema.optional(),
+  returnTo: z.string().min(1).max(500).default("/"),
+  dismissReason: z.string().max(300).optional()
+});
+
+export const generateFacebookImageSchema = z.object({
+  socialPostDraftId: z.string().min(1),
+  returnTo: z.string().min(1).max(500).default("/social-studio")
+});
+
 export const liveLeadResearchLeadSchema = z.object({
   companyName: z.string().min(2).max(180),
   website: z.string().url(),

@@ -1,6 +1,8 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { dismissCard, restoreDismissedCard } from "@/lib/dismissals";
+import { generateFacebookImageAsset } from "@/lib/facebook-image-assets";
 import { runAgencyBrain } from "@/lib/agency-brain";
 import { generateFacebookPostForProduct } from "@/lib/content-studio";
 import { buildDailySummary, buildLeadResearchBrief, buildPostDraft } from "@/lib/daily-engine";
@@ -13,7 +15,9 @@ import {
   agencyBrainRunSchema,
   approvalDecisionSchema,
   contactVerificationSchema,
+  dismissCardSchema,
   experimentSchema,
+  generateFacebookImageSchema,
   importLeadSchema,
   leadResearchSchema,
   manualMetricSchema,
@@ -34,6 +38,14 @@ function getString(formData: FormData, key: string) {
 function notice(path: string, code: string): never {
   const separator = path.includes("?") ? "&" : "?";
   redirect(`${path}${separator}notice=${code}`);
+}
+
+function safeReturnTo(value?: string) {
+  if (!value || !value.startsWith("/") || value.startsWith("//")) {
+    return "/";
+  }
+
+  return value;
 }
 
 function splitList(value?: string) {
@@ -504,6 +516,97 @@ export async function generateFacebookPostAction(formData: FormData) {
   }
 
   notice(`/products/${parsed.data.productSlug}?draft=${draftId}`, "content-studio-created");
+}
+
+export async function generateFacebookImageAction(formData: FormData) {
+  const parsed = generateFacebookImageSchema.safeParse({
+    socialPostDraftId: getString(formData, "socialPostDraftId"),
+    returnTo: getString(formData, "returnTo") ?? "/social-studio"
+  });
+
+  const returnTo = safeReturnTo(getString(formData, "returnTo"));
+
+  if (!parsed.success) {
+    notice(returnTo, "invalid");
+  }
+
+  if (!hasDatabaseUrl()) {
+    notice(returnTo, "db-missing");
+  }
+
+  try {
+    await generateFacebookImageAsset({
+      socialPostDraftId: parsed.data.socialPostDraftId
+    });
+  } catch (error) {
+    if (error instanceof Error && error.message === "OPENAI_IMAGE_CONFIGURATION_MISSING") {
+      notice(returnTo, "image-config-missing");
+    }
+
+    notice(returnTo, "image-generation-error");
+  }
+
+  notice(returnTo, "facebook-image-created");
+}
+
+export async function dismissDashboardCardAction(formData: FormData) {
+  const parsed = dismissCardSchema.safeParse({
+    itemType: getString(formData, "itemType"),
+    itemId: getString(formData, "itemId"),
+    productSlug: getString(formData, "productSlug"),
+    returnTo: getString(formData, "returnTo") ?? "/",
+    dismissReason: getString(formData, "dismissReason")
+  });
+  const returnTo = safeReturnTo(getString(formData, "returnTo"));
+
+  if (!parsed.success) {
+    notice(returnTo, "invalid");
+  }
+
+  if (!hasDatabaseUrl()) {
+    notice(returnTo, "db-missing");
+  }
+
+  try {
+    await dismissCard({
+      itemType: parsed.data.itemType,
+      itemId: parsed.data.itemId,
+      productSlug: parsed.data.productSlug,
+      dismissReason: parsed.data.dismissReason
+    });
+  } catch {
+    notice(returnTo, "db-error");
+  }
+
+  notice(returnTo, "card-dismissed");
+}
+
+export async function restoreDashboardCardAction(formData: FormData) {
+  const parsed = dismissCardSchema.safeParse({
+    itemType: getString(formData, "itemType"),
+    itemId: getString(formData, "itemId"),
+    returnTo: getString(formData, "returnTo") ?? "/"
+  });
+  const returnTo = safeReturnTo(getString(formData, "returnTo"));
+
+  if (!parsed.success) {
+    notice(returnTo, "invalid");
+  }
+
+  if (!hasDatabaseUrl()) {
+    notice(returnTo, "db-missing");
+  }
+
+  try {
+    await restoreDismissedCard({
+      itemType: parsed.data.itemType,
+      itemId: parsed.data.itemId
+    });
+  } catch {
+    notice(returnTo, "db-error");
+  }
+
+  notice(returnTo, "card-restored");
 }
 
 export async function importManualCsvLeadsAction(formData: FormData) {

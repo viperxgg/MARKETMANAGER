@@ -23,6 +23,26 @@ const notices: Record<string, { type: "success" | "warning" | "error"; message: 
     type: "error",
     message: "تعذر إنشاء مسودة فيسبوك. تحقق من إعدادات OpenAI وحدود سياق المنتج."
   },
+  "facebook-image-created": {
+    type: "success",
+    message: "تم توليد صورة فيسبوك وحفظها كأصل مسودة مرتبط بالمنشور. لم يتم نشر أي شيء."
+  },
+  "image-config-missing": {
+    type: "warning",
+    message: "توليد الصور غير مضبوط. أضف OPENAI_API_KEY وOPENAI_IMAGE_MODEL على الخادم، ولم يتم إنشاء صورة وهمية."
+  },
+  "image-generation-error": {
+    type: "error",
+    message: "تعذر توليد صورة فيسبوك. لم يتم حفظ صورة ولم يحدث أي نشر."
+  },
+  "card-dismissed": {
+    type: "success",
+    message: "تم إخفاء البطاقة من هذا العرض فقط. السجل الأصلي بقي محفوظًا في التاريخ أو الموافقات أو الذاكرة."
+  },
+  "card-restored": {
+    type: "success",
+    message: "تمت إعادة إظهار البطاقة في العرض."
+  },
   "lead-task-created": {
     type: "success",
     message: "تم إنشاء مهمة بحث العملاء لمراجعة المالك."

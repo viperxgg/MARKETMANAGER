@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { generateFacebookImageAction } from "@/app/actions";
 import { AppShell } from "@/components/app-shell";
 import { Notice } from "@/components/notice";
 import { Icons } from "@/components/icons";
+import { SubmitButton } from "@/components/submit-button";
 import { getSocialPostDraftDetail } from "@/lib/data-service";
 import { channelAr, statusAr } from "@/lib/ui-ar";
 
@@ -99,6 +101,16 @@ export default async function SocialDraftDetailPage({
                   فتح الحملة
                 </Link>
               ) : null}
+              {draft.platform === "facebook" ? (
+                <form action={generateFacebookImageAction}>
+                  <input name="socialPostDraftId" type="hidden" value={draft.id} />
+                  <input name="returnTo" type="hidden" value={`/social-studio/${draft.id}`} />
+                  <SubmitButton pendingLabel="جارٍ توليد صورة فيسبوك...">
+                    <Icons.image size={18} />
+                    توليد صورة فيسبوك
+                  </SubmitButton>
+                </form>
+              ) : null}
             </div>
           </div>
         </section>
@@ -111,6 +123,34 @@ export default async function SocialDraftDetailPage({
           </div>
 
           <div className="panel">
+            <h2 className="section-title">أصول الصور المسودة</h2>
+            {draft.assets.length === 0 ? (
+              <p className="muted">لم يتم توليد صورة لهذا المنشور بعد. الصورة خطوة منفصلة ولا تحدث إلا عند ضغط الزر.</p>
+            ) : (
+              <div className="stack">
+                {draft.assets.map((asset) => (
+                  <div className="panel subtle" key={asset.id}>
+                    <div className="split-row">
+                      <strong>{asset.imageModel}</strong>
+                      <span className="badge warning">{statusAr(asset.status)}</span>
+                    </div>
+                    {asset.imageUrl || asset.storedImageReference ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        alt="Facebook generated draft asset"
+                        className="draft-image-preview"
+                        src={asset.imageUrl ?? asset.storedImageReference ?? ""}
+                      />
+                    ) : null}
+                    <pre className="code-block">{asset.imagePrompt}</pre>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </section>
+
+        <section className="panel">
             <h2 className="section-title">حدود الصورة والادعاءات</h2>
             <ul className="list bullets">
               {draft.visualAvoid.map((item) => (
@@ -118,8 +158,8 @@ export default async function SocialDraftDetailPage({
               ))}
               <li>لا يوجد نشر تلقائي.</li>
               <li>لا يوجد تنفيذ عبر واجهات خارجية من هذه اللوحة.</li>
+              <li>لا شعارات وهمية، ولا شهادات عملاء وهمية، ولا شارات رسمية غير قابلة للتحقق.</li>
             </ul>
-          </div>
         </section>
       </div>
     </AppShell>

@@ -140,6 +140,8 @@ model Product {
   reports               Report[]
   manualTrackingEntries ManualTrackingEntry[]
   approvalItems         ApprovalItem[]
+  socialPostAssets      SocialPostAsset[]
+  dashboardDismissals   DashboardDismissal[]
 }
 
 model Campaign {
@@ -304,6 +306,32 @@ model SocialPostDraft {
   imageConcept          String
   imagePromptEn         String
   visualAvoid           String[]        @default([])
+  assets                SocialPostAsset[]
+}
+
+model SocialPostAsset {
+  id                    String          @id @default(cuid())
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @updatedAt
+  status                WorkStatus      @default(draft)
+  approved_by_owner     Boolean         @default(false)
+  manual_execution_required Boolean     @default(true)
+  notes                 String          @default("")
+  productId             String
+  product               Product         @relation(fields: [productId], references: [id])
+  socialPostDraftId     String
+  socialPostDraft       SocialPostDraft @relation(fields: [socialPostDraftId], references: [id])
+  platform              Channel         @default(facebook)
+  assetType             String          @default("image")
+  imagePrompt           String
+  imageModel            String
+  imageUrl              String?
+  storedImageReference  String?
+  warnings              String[]        @default([])
+  requiresApproval      Boolean         @default(true)
+
+  @@index([productId])
+  @@index([socialPostDraftId])
 }
 
 model ApprovalItem {
@@ -464,4 +492,22 @@ model Report {
   recommendations       String[]        @default([])
   nextWeekPlan          String[]        @default([])
   markdown              String
+}
+
+model DashboardDismissal {
+  id                    String          @id @default(cuid())
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @updatedAt
+  dismissedAt           DateTime        @default(now())
+  dismissedByOwner      Boolean         @default(true)
+  dismissReason         String?
+  itemType              String
+  itemId                String
+  scope                 String          @default("dashboard")
+  productId             String?
+  product               Product?        @relation(fields: [productId], references: [id])
+
+  @@unique([itemType, itemId])
+  @@index([scope])
+  @@index([productId])
 }

@@ -1,4 +1,5 @@
 import { buildDailySummary, buildLeadResearchBrief, buildPostDraft } from "./daily-engine";
+import { dismissalKey, getDismissedCardKeys } from "./dismissals";
 import { hasDatabaseUrl, prisma } from "./db";
 import { getLeadSearchProviderStatus } from "./lead-search-provider";
 import { ProductSlug, getProduct, products } from "./product-data";
@@ -44,6 +45,11 @@ export type DashboardData = {
     pendingApprovals: number;
   };
   notice?: DashboardNotice;
+  showDismissed: boolean;
+};
+
+type DismissalOptions = {
+  showDismissed?: boolean;
 };
 
 export type ProductsOverviewData = {
@@ -96,12 +102,28 @@ function matchesProductFilter(record: any, filter: ProductFilter) {
   return record.product?.slug === filter;
 }
 
+function withDismissalMeta<T extends { id: string }>(
+  items: T[],
+  itemType: string,
+  dismissedKeys: Set<string>,
+  showDismissed = false
+) {
+  return items
+    .map((item) => ({
+      ...item,
+      _itemType: itemType,
+      _dismissed: dismissedKeys.has(dismissalKey({ itemType, itemId: item.id }))
+    }))
+    .filter((item) => showDismissed || !item._dismissed);
+}
+
 export async function getDashboardData(
   notice?: DashboardNotice,
-  filter: ProductFilter = "all"
+  filter: ProductFilter = "all",
+  options: DismissalOptions = {}
 ): Promise<DashboardData> {
   if (!hasDatabaseUrl()) {
-    return getFallbackDashboardData(false, notice, filter);
+    return getFallbackDashboardData(false, notice, filter, options);
   }
 
   try {
@@ -156,63 +178,87 @@ export async function getDashboardData(
     const filteredLeads = leads.filter((lead: any) => filter === "all" || lead.product?.slug === filter);
     const filteredApprovals = approvals.filter((item: any) => matchesProductFilter(item, filter));
 
+    const dismissedKeys = await getDismissedCardKeys([
+      ...filteredDailyRuns.map((item: any) => ({ itemType: "daily_run", itemId: item.id })),
+      ...filteredMemories.map((item: any) => ({ itemType: "agency_memory", itemId: item.id })),
+      ...filteredApprovals.map((item: any) => ({ itemType: "approval_item", itemId: item.id })),
+      ...filteredPostDrafts.map((item: any) => ({ itemType: "social_post_draft", itemId: item.id })),
+      ...filteredOutreachDrafts.map((item: any) => ({ itemType: "outreach_draft", itemId: item.id }))
+    ]);
+    const visibleDailyRuns = withDismissalMeta(filteredDailyRuns as any[], "daily_run", dismissedKeys, options.showDismissed);
+    const visibleMemories = withDismissalMeta(filteredMemories as any[], "agency_memory", dismissedKeys, options.showDismissed);
+    const visibleApprovals = withDismissalMeta(filteredApprovals as any[], "approval_item", dismissedKeys, options.showDismissed);
+    const visiblePostDrafts = withDismissalMeta(filteredPostDrafts as any[], "social_post_draft", dismissedKeys, options.showDismissed);
+    const visibleOutreachDrafts = withDismissalMeta(filteredOutreachDrafts as any[], "outreach_draft", dismissedKeys, options.showDismissed);
+
     return {
       products,
       productFilter: filter,
       productFilterLabel: getProductFilterLabel(filter),
       dbConnected: true,
-      latestDailyRuns: filteredDailyRuns.map((run: any) => ({
+      latestDailyRuns: visibleDailyRuns.map((run: any) => ({
         id: run.id,
         productName: run.product?.name ?? "عام",
         summary: run.summary,
         status: run.status,
-        createdAt: run.createdAt.toISOString()
+        createdAt: run.createdAt.toISOString(),
+        _dismissed: run._dismissed,
+        _itemType: run._itemType
       })),
-      memoryInsights: filteredMemories.map((memory: any) => ({
+      memoryInsights: visibleMemories.map((memory: any) => ({
         id: memory.id,
         productName: memory.product?.name ?? "عام",
         title: memory.title,
         insight: memory.insight,
-        confidence: memory.confidence
+        confidence: memory.confidence,
+        _dismissed: memory._dismissed,
+        _itemType: memory._itemType
       })),
       approvalItems: [
-        ...filteredApprovals.map((item: any) => ({
+        ...visibleApprovals.map((item: any) => ({
           id: item.id,
           itemType: item.itemType,
           label: `${item.product?.name ?? "عام"}: ${item.contentPreview}`,
           status: item.status,
-          riskWarnings: item.riskWarnings
+          riskWarnings: item.riskWarnings,
+          _dismissed: item._dismissed,
+          _itemType: item._itemType
         })),
-        ...filteredPostDrafts.map((post: any) => ({
+        ...visiblePostDrafts.map((post: any) => ({
           id: post.id,
           itemType: "منشور اجتماعي",
           label: `${post.product.name}: ${post.hook}`,
           status: post.status,
-          riskWarnings: ["التنفيذ اليدوي مطلوب", "لا يوجد نشر تلقائي"]
+          riskWarnings: ["التنفيذ اليدوي مطلوب", "لا يوجد نشر تلقائي"],
+          _dismissed: post._dismissed,
+          _itemType: post._itemType
         })),
-        ...filteredOutreachDrafts.map((draft: any) => ({
+        ...visibleOutreachDrafts.map((draft: any) => ({
           id: draft.id,
           itemType: "مسودة تواصل",
           label: `${draft.product.name}: ${draft.subject}`,
           status: draft.status,
-          riskWarnings: ["التنفيذ اليدوي مطلوب", "لا يوجد إرسال تلقائي"]
+          riskWarnings: ["التنفيذ اليدوي مطلوب", "لا يوجد إرسال تلقائي"],
+          _dismissed: draft._dismissed,
+          _itemType: draft._itemType
         }))
       ],
       commandStats: {
         activeCampaigns: filteredCampaigns.length,
-        draftEmails: filteredOutreachDrafts.length,
-        draftPosts: filteredPostDrafts.length,
+        draftEmails: visibleOutreachDrafts.length,
+        draftPosts: visiblePostDrafts.length,
         qualifiedLeads: filteredLeads.length,
-        pendingApprovals: filteredApprovals.length + filteredPostDrafts.length + filteredOutreachDrafts.length
+        pendingApprovals: visibleApprovals.length + visiblePostDrafts.length + visibleOutreachDrafts.length
       },
-      notice
+      notice,
+      showDismissed: Boolean(options.showDismissed)
     };
   } catch {
     return getFallbackDashboardData(false, {
       type: "warning",
       message:
         "قاعدة البيانات غير متاحة الآن. تعرض اللوحة بيانات آمنة من قاعدة المعرفة."
-    }, filter);
+    }, filter, options);
   }
 }
 
@@ -281,7 +327,8 @@ export async function getProductsOverview(): Promise<ProductsOverviewData> {
 function getFallbackDashboardData(
   dbConnected: boolean,
   notice?: DashboardNotice,
-  filter: ProductFilter = "all"
+  filter: ProductFilter = "all",
+  options: DismissalOptions = {}
 ): DashboardData {
   const selectedProduct = filter !== "all" && filter !== "global" ? getProduct(filter) : undefined;
   const daily = buildDailySummary(selectedProduct);
@@ -343,7 +390,8 @@ function getFallbackDashboardData(
       qualifiedLeads: 0,
       pendingApprovals: 1
     },
-    notice
+    notice,
+    showDismissed: Boolean(options.showDismissed)
   };
 }
 
@@ -388,7 +436,7 @@ export async function ensureProductRecord(slug: string) {
   });
 }
 
-export async function getProductWorkspace(slug: string) {
+export async function getProductWorkspace(slug: string, options: DismissalOptions = {}) {
   const seed = getProduct(slug);
 
   if (!seed) {
@@ -410,7 +458,8 @@ export async function getProductWorkspace(slug: string) {
       recentLeads: [],
       memoryInsights: [],
       recentCampaigns: [],
-      approvalItems: []
+      approvalItems: [],
+      showDismissed: Boolean(options.showDismissed)
     };
   }
 
@@ -425,7 +474,8 @@ export async function getProductWorkspace(slug: string) {
       prisma.socialPostDraft.findMany({
         where: { productId: product.id },
         orderBy: { createdAt: "desc" },
-        take: 5
+        take: 8,
+        include: { assets: { orderBy: { createdAt: "desc" }, take: 3 } }
       }),
       prisma.outreachDraft.findMany({
         where: { productId: product.id },
@@ -460,18 +510,28 @@ export async function getProductWorkspace(slug: string) {
       })
     ]);
 
+    const dismissedKeys = await getDismissedCardKeys([
+      ...recentPosts.map((item: any) => ({ itemType: "social_post_draft", itemId: item.id })),
+      ...recentOutreachDrafts.map((item: any) => ({ itemType: "outreach_draft", itemId: item.id })),
+      ...recentLeads.map((item: any) => ({ itemType: "lead", itemId: item.id })),
+      ...memoryInsights.map((item: any) => ({ itemType: "agency_memory", itemId: item.id })),
+      ...recentCampaigns.map((item: any) => ({ itemType: "campaign", itemId: item.id })),
+      ...approvalItems.map((item: any) => ({ itemType: "approval_item", itemId: item.id }))
+    ]);
+
     return {
       product: seed,
       dbConnected: true,
       postDraft,
       leadBrief,
       providerStatus: getLeadSearchProviderStatus(),
-      recentPosts,
-      recentOutreachDrafts,
-      recentLeads,
-      memoryInsights,
-      recentCampaigns,
-      approvalItems
+      recentPosts: withDismissalMeta(recentPosts as any[], "social_post_draft", dismissedKeys, options.showDismissed),
+      recentOutreachDrafts: withDismissalMeta(recentOutreachDrafts as any[], "outreach_draft", dismissedKeys, options.showDismissed),
+      recentLeads: withDismissalMeta(recentLeads as any[], "lead", dismissedKeys, options.showDismissed),
+      memoryInsights: withDismissalMeta(memoryInsights as any[], "agency_memory", dismissedKeys, options.showDismissed),
+      recentCampaigns: withDismissalMeta(recentCampaigns as any[], "campaign", dismissedKeys, options.showDismissed),
+      approvalItems: withDismissalMeta(approvalItems as any[], "approval_item", dismissedKeys, options.showDismissed),
+      showDismissed: Boolean(options.showDismissed)
     };
   } catch {
     return {
@@ -485,7 +545,8 @@ export async function getProductWorkspace(slug: string) {
       recentLeads: [],
       memoryInsights: [],
       recentCampaigns: [],
-      approvalItems: []
+      approvalItems: [],
+      showDismissed: Boolean(options.showDismissed)
     };
   }
 }
@@ -538,7 +599,10 @@ export async function getSocialPostDraftDetail(id: string) {
       where: { id },
       include: {
         product: true,
-        campaign: true
+        campaign: true,
+        assets: {
+          orderBy: { createdAt: "desc" }
+        }
       }
     });
   } catch {
@@ -565,7 +629,7 @@ export async function getApprovalItemDetail(id: string) {
   }
 }
 
-export async function getOperatingData(filter: ProductFilter = "all") {
+export async function getOperatingData(filter: ProductFilter = "all", options: DismissalOptions = {}) {
   if (!hasDatabaseUrl()) {
     return {
       dbConnected: false,
@@ -582,7 +646,8 @@ export async function getOperatingData(filter: ProductFilter = "all") {
       manualTrackingEntries: [],
       experiments: [],
       agencyMemories: [],
-      reports: []
+      reports: [],
+      showDismissed: Boolean(options.showDismissed)
     };
   }
 
@@ -634,7 +699,7 @@ export async function getOperatingData(filter: ProductFilter = "all") {
       prisma.socialPostDraft.findMany({
         orderBy: { createdAt: "desc" },
         take: 30,
-        include: { product: true, campaign: true }
+        include: { product: true, campaign: true, assets: { orderBy: { createdAt: "desc" }, take: 3 } }
       }),
       prisma.approvalItem.findMany({
         orderBy: { createdAt: "desc" },
@@ -681,22 +746,35 @@ export async function getOperatingData(filter: ProductFilter = "all") {
     const filteredAgencyMemories = agencyMemories.filter((memory: any) => matchesProductFilter(memory, filter));
     const filteredReports = reports.filter((report: any) => matchesProductFilter(report, filter));
 
+    const dismissedKeys = await getDismissedCardKeys([
+      ...filteredCampaigns.map((item: any) => ({ itemType: "campaign", itemId: item.id })),
+      ...filteredLeads.map((item: any) => ({ itemType: "lead", itemId: item.id })),
+      ...filteredOutreachDrafts.map((item: any) => ({ itemType: "outreach_draft", itemId: item.id })),
+      ...filteredSocialPostDrafts.map((item: any) => ({ itemType: "social_post_draft", itemId: item.id })),
+      ...filteredApprovalItems.map((item: any) => ({ itemType: "approval_item", itemId: item.id })),
+      ...filteredManualTrackingEntries.map((item: any) => ({ itemType: "manual_tracking_entry", itemId: item.id })),
+      ...filteredExperiments.map((item: any) => ({ itemType: "experiment", itemId: item.id })),
+      ...filteredAgencyMemories.map((item: any) => ({ itemType: "agency_memory", itemId: item.id })),
+      ...filteredReports.map((item: any) => ({ itemType: "report", itemId: item.id }))
+    ]);
+
     return {
       dbConnected: true,
       productFilter: filter,
       productFilterLabel: getProductFilterLabel(filter),
       products,
-      campaigns: filteredCampaigns,
-      leads: filteredLeads,
+      campaigns: withDismissalMeta(filteredCampaigns as any[], "campaign", dismissedKeys, options.showDismissed),
+      leads: withDismissalMeta(filteredLeads as any[], "lead", dismissedKeys, options.showDismissed),
       websiteAnalyses: filteredWebsiteAnalyses,
       contactVerifications: filteredContactVerifications,
-      outreachDrafts: filteredOutreachDrafts,
-      socialPostDrafts: filteredSocialPostDrafts,
-      approvalItems: filteredApprovalItems,
-      manualTrackingEntries: filteredManualTrackingEntries,
-      experiments: filteredExperiments,
-      agencyMemories: filteredAgencyMemories,
-      reports: filteredReports
+      outreachDrafts: withDismissalMeta(filteredOutreachDrafts as any[], "outreach_draft", dismissedKeys, options.showDismissed),
+      socialPostDrafts: withDismissalMeta(filteredSocialPostDrafts as any[], "social_post_draft", dismissedKeys, options.showDismissed),
+      approvalItems: withDismissalMeta(filteredApprovalItems as any[], "approval_item", dismissedKeys, options.showDismissed),
+      manualTrackingEntries: withDismissalMeta(filteredManualTrackingEntries as any[], "manual_tracking_entry", dismissedKeys, options.showDismissed),
+      experiments: withDismissalMeta(filteredExperiments as any[], "experiment", dismissedKeys, options.showDismissed),
+      agencyMemories: withDismissalMeta(filteredAgencyMemories as any[], "agency_memory", dismissedKeys, options.showDismissed),
+      reports: withDismissalMeta(filteredReports as any[], "report", dismissedKeys, options.showDismissed),
+      showDismissed: Boolean(options.showDismissed)
     };
   } catch {
     return {
@@ -714,7 +792,8 @@ export async function getOperatingData(filter: ProductFilter = "all") {
       manualTrackingEntries: [],
       experiments: [],
       agencyMemories: [],
-      reports: []
+      reports: [],
+      showDismissed: Boolean(options.showDismissed)
     };
   }
 }

@@ -202,46 +202,6 @@ async function callOpenAiForFacebookPost(context: Awaited<ReturnType<typeof load
   return facebookContentStudioOutputSchema.parse(parseJsonObject(content));
 }
 
-async function maybeGenerateImage(prompt: string) {
-  const apiKey = process.env.OPENAI_API_KEY;
-  const model = process.env.OPENAI_IMAGE_MODEL || process.env.IMAGE_GENERATION_MODEL;
-
-  if (!apiKey || !model) {
-    return null;
-  }
-
-  const response = await fetch("https://api.openai.com/v1/images/generations", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      model,
-      prompt,
-      size: "1024x1024",
-      n: 1
-    })
-  });
-
-  if (!response.ok) {
-    return null;
-  }
-
-  const payload = await response.json();
-  const image = payload?.data?.[0];
-
-  if (typeof image?.url === "string") {
-    return image.url;
-  }
-
-  if (typeof image?.b64_json === "string") {
-    return `data:image/png;base64,${image.b64_json}`;
-  }
-
-  return null;
-}
-
 function fallbackOutput(context: Awaited<ReturnType<typeof loadStudioContext>>): FacebookContentStudioOutput {
   const { product, recentPosts } = context;
   const duplicateRisk = recentPosts.length > 0 ? "medium" : "low";
@@ -302,13 +262,13 @@ export async function generateFacebookPostForProduct(productSlug: ProductSlug) {
   });
   assertNoProductLeakage(output);
 
-  const imageUrl = await maybeGenerateImage(output.imagePrompt);
   const finalOutput = facebookContentStudioOutputSchema.parse({
     ...output,
-    imageUrl,
-    warnings: imageUrl
-      ? output.warnings
-      : [...output.warnings, "توليد الصور غير مضبوط أو لم يرجع صورة."]
+    imageUrl: null,
+    warnings: [
+      ...output.warnings,
+      "توليد الصورة خطوة منفصلة بعد حفظ مسودة منشور فيسبوك."
+    ]
   });
 
   const draft = await prisma.socialPostDraft.create({

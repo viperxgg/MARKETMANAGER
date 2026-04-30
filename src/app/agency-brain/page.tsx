@@ -1,9 +1,11 @@
 import Link from "next/link";
 import { runAgencyBrainAction } from "@/app/actions";
+import { DismissCardButton, ShowDismissedToggle } from "@/components/dismiss-card";
 import { AppShell } from "@/components/app-shell";
 import { Icons } from "@/components/icons";
 import { Notice } from "@/components/notice";
 import { getAgencyBrainRuns } from "@/lib/agency-brain";
+import { dismissalKey, getDismissedCardKeys } from "@/lib/dismissals";
 import { getLeadSearchProviderStatus } from "@/lib/lead-search-provider";
 import { products } from "@/lib/product-data";
 import { duplicateRiskAr, statusAr } from "@/lib/ui-ar";
@@ -38,12 +40,39 @@ function extractOutput(markdown: string): AgencyBrainOutput | null {
 export default async function AgencyBrainPage({
   searchParams
 }: {
-  searchParams: Promise<{ notice?: string; report?: string }>;
+  searchParams: Promise<{ notice?: string; report?: string; scope?: string; showDismissed?: string }>;
 }) {
   const [params, runs] = await Promise.all([searchParams, getAgencyBrainRuns()]);
   const selectedRun = runs.find((run) => run.id === params.report) ?? runs[0];
   const output = selectedRun ? extractOutput(selectedRun.markdown) : null;
   const providerStatus = getLeadSearchProviderStatus();
+  const showDismissed = params.showDismissed === "1";
+  const basePath = `/agency-brain${params.scope ? `?scope=${params.scope}` : ""}`;
+  const returnTo = `${basePath}${showDismissed ? `${basePath.includes("?") ? "&" : "?"}showDismissed=1` : ""}`;
+  const recommendationItems = output
+    ? output.recommendations.map((recommendation, index) => ({
+        recommendation,
+        index,
+        itemType: "agency_brain_recommendation",
+        itemId: `${selectedRun?.id ?? "current"}:${index}:${recommendation.title}`
+      }))
+    : [];
+  const dismissedKeys = await getDismissedCardKeys([
+    ...runs.map((run) => ({ itemType: "agency_brain_run", itemId: run.id })),
+    ...recommendationItems.map((item) => ({ itemType: item.itemType, itemId: item.itemId }))
+  ]);
+  const visibleRuns = runs
+    .map((run) => ({
+      ...run,
+      _dismissed: dismissedKeys.has(dismissalKey({ itemType: "agency_brain_run", itemId: run.id }))
+    }))
+    .filter((run) => showDismissed || !run._dismissed);
+  const visibleRecommendations = recommendationItems
+    .map((item) => ({
+      ...item,
+      _dismissed: dismissedKeys.has(dismissalKey({ itemType: item.itemType, itemId: item.itemId }))
+    }))
+    .filter((item) => showDismissed || !item._dismissed);
 
   return (
     <AppShell>
@@ -61,6 +90,16 @@ export default async function AgencyBrainPage({
           <span className="badge warning">موافقة يدوية مطلوبة</span>
         </div>
 
+        <section className="panel subtle">
+          <div className="split-row">
+            <div>
+              <strong>فلترة بطاقات عقل الوكالة</strong>
+              <p className="muted">إخفاء التوصيات بصري فقط؛ التقارير والذاكرة والموافقات تبقى محفوظة.</p>
+            </div>
+            <ShowDismissedToggle basePath={basePath} showDismissed={showDismissed} />
+          </div>
+        </section>
+
         <section className="grid two">
           <div className="panel">
             <h2 className="section-title">تشغيل التحليل</h2>
@@ -68,7 +107,7 @@ export default async function AgencyBrainPage({
               <div className="form-grid">
                 <div className="field">
                   <label htmlFor="scope">النطاق</label>
-                  <select id="scope" name="scope" required defaultValue="">
+                  <select id="scope" name="scope" required defaultValue={params.scope ?? ""}>
                     <option value="" disabled>
                       اختر النطاق
                     </option>
@@ -124,19 +163,30 @@ export default async function AgencyBrainPage({
         <section className="grid two">
           <div className="panel">
             <h2 className="section-title">التشغيلات الأخيرة</h2>
-            {runs.length === 0 ? (
+            {visibleRuns.length === 0 ? (
               <p className="muted">لا توجد تشغيلات لعقل الوكالة بعد.</p>
             ) : (
               <div className="stack">
-                {runs.map((run) => (
-                  <Link className="panel subtle" href={`/agency-brain?report=${run.id}`} key={run.id}>
+                {visibleRuns.map((run) => (
+                  <div className={`panel subtle ${run._dismissed ? "dismissed-card" : ""}`} key={run.id}>
                     <div className="split-row">
-                      <strong>{run.title}</strong>
-                      <span className="badge warning">{statusAr(run.status)}</span>
+                      <Link href={`/agency-brain?report=${run.id}`}>
+                        <strong>{run.title}</strong>
+                      </Link>
+                      <div className="button-row">
+                        <span className="badge warning">{statusAr(run.status)}</span>
+                        <DismissCardButton
+                          itemId={run.id}
+                          itemType="agency_brain_run"
+                          productSlug={run.product?.slug}
+                          returnTo={returnTo}
+                          isDismissed={run._dismissed}
+                        />
+                      </div>
                     </div>
                     <p className="muted">{run.product?.name ?? "عام"}</p>
                     <p>{run.summary}</p>
-                  </Link>
+                  </div>
                 ))}
               </div>
             )}
@@ -176,13 +226,22 @@ export default async function AgencyBrainPage({
               </Link>
             </div>
             <div className="stack">
-              {output.recommendations.map((recommendation) => (
-                <div className="panel subtle" key={`${recommendation.type}-${recommendation.title}`}>
+              {visibleRecommendations.map(({ recommendation, itemType, itemId, _dismissed }) => (
+                <div className={`panel subtle ${_dismissed ? "dismissed-card" : ""}`} key={`${recommendation.type}-${recommendation.title}`}>
                   <div className="split-row">
                     <strong>{recommendation.title}</strong>
-                    <span className={`badge ${recommendation.duplicateRisk === "high" ? "warning" : ""}`}>
-                      التكرار: {duplicateRiskAr(recommendation.duplicateRisk)}
-                    </span>
+                    <div className="button-row">
+                      <span className={`badge ${recommendation.duplicateRisk === "high" ? "warning" : ""}`}>
+                        خطر التكرار: {duplicateRiskAr(recommendation.duplicateRisk)}
+                      </span>
+                      <DismissCardButton
+                        itemId={itemId}
+                        itemType={itemType}
+                        productSlug={output.productSlug ?? undefined}
+                        returnTo={returnTo}
+                        isDismissed={_dismissed}
+                      />
+                    </div>
                   </div>
                   <p>{recommendation.description}</p>
                   <div className="meta-grid">
