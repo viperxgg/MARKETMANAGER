@@ -3,8 +3,9 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("postgresql://postgres.ggahyihcjbmxpohkjzua:2662562Sam318!@aws-1-eu-north-1.pooler.supabase.com:6543/postgres?pgbouncer=true&connection_limit=1")
+  directUrl = env("postgresql://postgres.ggahyihcjbmxpohkjzua:2662562Sam318!@aws-1-eu-north-1.pooler.supabase.com:5432/postgres")
 }
 
 enum ProductStatus {
