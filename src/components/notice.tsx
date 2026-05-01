@@ -1,4 +1,73 @@
 const notices: Record<string, { type: "success" | "warning" | "error"; message: string }> = {
+  "test-email-sent": {
+    type: "success",
+    message:
+      "تم إرسال بريد الاختبار. تحقق من صندوق الوارد. إذا لم يصل خلال دقيقتين، تحقق من إعدادات Resend وتحقق المجال."
+  },
+  "test-email-disabled": {
+    type: "warning",
+    message:
+      "ENABLE_EMAIL ما زال false. لن يتم إرسال أي بريد حتى تقوم بتفعيل العلم يدويًا."
+  },
+  "test-email-recipient-rejected": {
+    type: "error",
+    message:
+      "العنوان المُدخل غير موجود في AUTH_ALLOWED_EMAILS. لا يُسمح بالإرسال إلى أي عنوان آخر."
+  },
+  "test-email-not-configured": {
+    type: "error",
+    message:
+      "Resend غير مضبوط. تحقق من RESEND_API_KEY و RESEND_FROM."
+  },
+  "test-email-failed": {
+    type: "error",
+    message:
+      "فشل إرسال بريد الاختبار. راجع آخر صف في ExecutionLog لمعرفة السبب الدقيق."
+  },
+  "github-test-ok": {
+    type: "success",
+    message: "تم استدعاء GitHub بنجاح. آخر commit ظاهر في الأسفل."
+  },
+  "github-test-disabled": {
+    type: "warning",
+    message: "ENABLE_GITHUB ما زال false. التشغيل تم تسجيله في ExecutionLog ولم يحدث استدعاء فعلي."
+  },
+  "github-test-not-configured": {
+    type: "error",
+    message: "GitHub غير مضبوط. تحقق من GITHUB_TOKEN و GITHUB_REPO."
+  },
+  "github-test-failed": {
+    type: "error",
+    message: "فشل اختبار GitHub. راجع آخر صف في ExecutionLog لمعرفة السبب."
+  },
+  "vercel-test-ok": {
+    type: "success",
+    message: "تم استدعاء Vercel بنجاح. آخر النشرات ظاهرة في الأسفل."
+  },
+  "vercel-test-disabled": {
+    type: "warning",
+    message: "ENABLE_VERCEL ما زال false. التشغيل تم تسجيله في ExecutionLog ولم يحدث استدعاء فعلي."
+  },
+  "vercel-test-not-configured": {
+    type: "error",
+    message: "Vercel غير مضبوط. تحقق من VERCEL_TOKEN و VERCEL_PROJECT_ID."
+  },
+  "vercel-test-failed": {
+    type: "error",
+    message: "فشل اختبار Vercel. راجع آخر صف في ExecutionLog لمعرفة السبب."
+  },
+  "workflow-completed": {
+    type: "success",
+    message: "اكتمل سير العمل بنجاح. راجع مركز الموافقات للخطوات التالية."
+  },
+  "workflow-partial": {
+    type: "warning",
+    message: "اكتمل سير العمل جزئيًا. راجع سجل التشغيل لمعرفة الخطوات المتبقية."
+  },
+  "workflow-failed": {
+    type: "error",
+    message: "فشل سير العمل. راجع التحذيرات في سجل التشغيل وحاول مرة أخرى."
+  },
   "daily-run-created": {
     type: "success",
     message: "تم إنشاء التشغيل اليومي كمسودة. لم يتم إرسال أو نشر أي شيء."
@@ -173,12 +242,31 @@ const notices: Record<string, { type: "success" | "warning" | "error"; message: 
   }
 };
 
-export function Notice({ code }: { code?: string }) {
+const workflowNoticeCodes = new Set([
+  "workflow-completed",
+  "workflow-partial",
+  "workflow-failed"
+]);
+
+export function Notice({ code, runId }: { code?: string; runId?: string }) {
   if (!code || !notices[code]) {
     return null;
   }
 
   const notice = notices[code];
+  const showTraceLink = runId && workflowNoticeCodes.has(code);
 
-  return <div className={`notice ${notice.type}`}>{notice.message}</div>;
+  return (
+    <div className={`notice ${notice.type}`}>
+      <span>{notice.message}</span>
+      {showTraceLink ? (
+        <>
+          {" "}
+          <a className="notice-link" href={`/workflows/${runId}`}>
+            عرض سجل التشغيل ←
+          </a>
+        </>
+      ) : null}
+    </div>
+  );
 }

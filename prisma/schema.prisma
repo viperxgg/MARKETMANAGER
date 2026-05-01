@@ -536,3 +536,47 @@ model DashboardDismissal {
   @@index([scope])
   @@index([productId])
 }
+
+model WorkflowRun {
+  id            String    @id @default(cuid())
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  workflowId    String
+  status        String    @default("running")
+  triggeredBy   String    @default("system")
+  productSlug   String?
+  context       Json
+  steps         Json
+  finalState    Json?
+  completedAt   DateTime?
+
+  @@index([workflowId])
+  @@index([productSlug])
+  @@index([status])
+}
+
+model ExecutionLog {
+  id               String    @id @default(cuid())
+  createdAt        DateTime  @default(now())
+  integrationId    String
+  commandId        String
+  operatorEmail    String
+  approvalItemId   String?
+  workflowRunId    String?
+  requiresApproval Boolean   @default(false)
+  dryRun           Boolean   @default(false)
+  status           String    @default("started")
+  input            Json
+  result           Json?
+  externalId       String?
+  error            String?
+  costUsd          Float?
+  durationMs       Int?
+  completedAt      DateTime?
+
+  @@index([integrationId, commandId])
+  @@index([approvalItemId])
+  @@index([workflowRunId])
+  @@index([status])
+  @@index([createdAt])
+}

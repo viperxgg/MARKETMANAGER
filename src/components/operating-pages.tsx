@@ -22,6 +22,7 @@ import { channelAr, duplicateRiskAr, scopeAr, statusAr } from "@/lib/ui-ar";
 import { Icons } from "./icons";
 import { DismissCardButton, ShowDismissedToggle } from "./dismiss-card";
 import { SectionPage } from "./section-page";
+import { SubmitButton } from "./submit-button";
 
 type OperatingData = Awaited<ReturnType<typeof getOperatingData>>;
 type AnyRecord = Record<string, any>;
@@ -333,10 +334,10 @@ function LeadImportForm({ data, returnTo = "/lead-research" }: { data: Operating
         <label>وسوم</label>
         <input name="tags" placeholder="المدينة، الشريحة، المصدر" />
       </div>
-      <button className="button" type="submit">
+      <SubmitButton className="button" pendingLabel="جارٍ استيراد العميل...">
         <Icons.target size={18} />
         استيراد عميل تم بحثه
-      </button>
+      </SubmitButton>
     </form>
   );
 }
@@ -450,10 +451,10 @@ function CampaignBriefForm() {
         <label>زاوية الرسالة</label>
         <input name="messageAngle" placeholder="رحلة عميل أبسط بدون ضغط" required />
       </div>
-      <button className="button" type="submit">
+      <SubmitButton className="button" pendingLabel="جارٍ إنشاء الموجز...">
         <Icons.file size={18} />
         إنشاء الموجز
-      </button>
+      </SubmitButton>
     </form>
   );
 }
@@ -681,10 +682,10 @@ export function WebsiteAnalysisOperatingPage({ data }: { data: OperatingData }) 
                   ))}
                 </select>
               </div>
-              <button className="button" type="submit">
+              <SubmitButton className="button" pendingLabel="جارٍ حفظ التحليل...">
                 <Icons.clipboard size={18} />
                 حفظ التحليل
-              </button>
+              </SubmitButton>
             </form>
           )}
         </div>
@@ -755,10 +756,10 @@ export function OutreachOperatingPage({ data }: { data: OperatingData }) {
                   <textarea name={name} required={name !== "optOutText"} />
                 </div>
               ))}
-              <button className="button" type="submit">
+              <SubmitButton className="button" pendingLabel="جارٍ إنشاء مسودة البريد...">
                 <Icons.mail size={18} />
                 إنشاء مسودة بريد
-              </button>
+              </SubmitButton>
             </form>
           )}
         </div>
@@ -838,10 +839,14 @@ export function SocialOperatingPage({ data }: { data: OperatingData }) {
             ) : null}
             <form action={generateFacebookPostAction} className="stack">
               <input name="productSlug" type="hidden" value={selectedProduct.slug} />
-              <button className="button" disabled={!openAiTextConfigured} type="submit">
+              <SubmitButton
+                className="button"
+                disabled={!openAiTextConfigured}
+                pendingLabel="جارٍ إنشاء منشور فيسبوك بالذكاء الاصطناعي..."
+              >
                 <Icons.megaphone size={18} />
                 إنشاء منشور فيسبوك بالذكاء الاصطناعي
-              </button>
+              </SubmitButton>
             </form>
             <ul className="list bullets">
               <li>لا يوجد نشر تلقائي.</li>
@@ -914,10 +919,10 @@ export function SocialOperatingPage({ data }: { data: OperatingData }) {
                 <label>ما يجب تجنبه بصريًا</label>
                 <input name="visualAvoid" placeholder="شعارات وهمية، ادعاءات مبالغ فيها" />
               </div>
-              <button className="button secondary" type="submit">
+              <SubmitButton className="button secondary" pendingLabel="جارٍ حفظ المسودة اليدوية...">
                 <Icons.megaphone size={18} />
                 حفظ مسودة يدوية
-              </button>
+              </SubmitButton>
             </form>
           </div>
         </section>
@@ -981,10 +986,13 @@ export function SocialOperatingPage({ data }: { data: OperatingData }) {
                         <form action={generateFacebookImageAction}>
                           <input name="socialPostDraftId" type="hidden" value={post.id} />
                           <input name="returnTo" type="hidden" value={returnTo} />
-                          <button className="button secondary compact" type="submit">
+                          <SubmitButton
+                            className="button secondary compact"
+                            pendingLabel="جارٍ توليد صورة فيسبوك..."
+                          >
                             <Icons.image size={18} />
                             توليد صورة فيسبوك
-                          </button>
+                          </SubmitButton>
                         </form>
                       ) : null}
                     </div>
@@ -1138,10 +1146,10 @@ export function ManualTrackingOperatingPage({ data }: { data: OperatingData }) {
               <label>ملاحظات</label>
               <textarea name="notes" />
             </div>
-            <button className="button" type="submit">
+            <SubmitButton className="button" pendingLabel="جارٍ تسجيل المؤشر...">
               <Icons.check size={18} />
               تسجيل المؤشر
-            </button>
+            </SubmitButton>
           </form>
         </div>
         <div className="panel">
@@ -1226,10 +1234,10 @@ export function ExperimentsOperatingPage({ data }: { data: OperatingData }) {
               <label>المؤشر</label>
               <input name="metric" required />
             </div>
-            <button className="button" type="submit">
+            <SubmitButton className="button" pendingLabel="جارٍ إنشاء التجربة...">
               <Icons.experiments size={18} />
               إنشاء تجربة
-            </button>
+            </SubmitButton>
           </form>
         </div>
         <div className="panel">
@@ -1311,10 +1319,10 @@ export function AgencyMemoryOperatingPage({ data }: { data: OperatingData }) {
               <label>التوصية</label>
               <textarea name="recommendation" required />
             </div>
-            <button className="button" type="submit">
+            <SubmitButton className="button" pendingLabel="جارٍ حفظ الذاكرة...">
               <Icons.brain size={18} />
               حفظ الذاكرة
-            </button>
+            </SubmitButton>
           </form>
         </div>
         <div className="panel">
@@ -1394,10 +1402,10 @@ export function ReportsOperatingPage({ data }: { data: OperatingData }) {
                 <textarea name={field} placeholder="عنصر واحد في كل سطر" />
               </div>
             ))}
-            <button className="button" type="submit">
+            <SubmitButton className="button" pendingLabel="جارٍ إنشاء التقرير...">
               <Icons.file size={18} />
               إنشاء تقرير
-            </button>
+            </SubmitButton>
           </form>
         </div>
         <div className="panel">

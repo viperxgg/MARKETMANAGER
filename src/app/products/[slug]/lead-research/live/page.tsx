@@ -1,9 +1,13 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { importManualCsvLeadsAction, rejectLiveResearchLeadAction } from "@/app/actions";
+import {
+  rejectLiveResearchLeadAction,
+  runLeadResearchPipelineAction
+} from "@/app/actions";
 import { AppShell } from "@/components/app-shell";
 import { Icons } from "@/components/icons";
 import { Notice } from "@/components/notice";
+import { SubmitButton } from "@/components/submit-button";
 import { runLiveLeadResearch } from "@/lib/live-lead-research";
 import { getProduct, products } from "@/lib/product-data";
 import { duplicateRiskAr, statusAr } from "@/lib/ui-ar";
@@ -21,7 +25,7 @@ export default async function LiveLeadResearchPage({
   searchParams
 }: {
   params: Promise<{ slug: string }>;
-  searchParams: Promise<{ notice?: string }>;
+  searchParams: Promise<{ notice?: string; runId?: string }>;
 }) {
   const [{ slug }, query] = await Promise.all([params, searchParams]);
   const product = getProduct(slug);
@@ -34,7 +38,7 @@ export default async function LiveLeadResearchPage({
 
   return (
     <AppShell>
-      <Notice code={query.notice} />
+      <Notice code={query.notice} runId={query.runId} />
       <div className="stack large">
         <div className="topbar">
           <div>
@@ -112,16 +116,29 @@ export default async function LiveLeadResearchPage({
             </div>
             <span className="badge">manual-csv</span>
           </div>
-          <form action={importManualCsvLeadsAction} className="stack">
+          <form action={runLeadResearchPipelineAction} className="stack">
             <input name="productSlug" type="hidden" value={product.slug} />
+            <input name="targetCount" type="hidden" value="20" />
+            <input
+              name="returnTo"
+              type="hidden"
+              value={`/products/${product.slug}/lead-research/live`}
+            />
             <div className="field">
               <label>ملف CSV</label>
               <input accept=".csv,text/csv" name="csvFile" required type="file" />
             </div>
-            <button className="button" type="submit">
+            <SubmitButton
+              className="button"
+              pendingLabel="جارٍ تشغيل سير عمل بحث العملاء (5 خطوات)..."
+            >
               <Icons.search size={18} />
-              استيراد CSV وتقييم العملاء
-            </button>
+              تشغيل سير عمل بحث العملاء (CSV → تقييم → موافقة)
+            </SubmitButton>
+            <p className="muted">
+              يقوم سير العمل تلقائيًا بإنشاء حملة، استيراد العملاء، تقييمهم، دفع المؤهلين إلى مركز الموافقات،
+              وتسجيل الملخص في ذاكرة الوكالة.
+            </p>
           </form>
           <p className="muted">
             لا يتم التواصل مع أي جهة تلقائيًا. الصفوف المقبولة تصبح عملاء كمسودة،
@@ -264,9 +281,9 @@ export default async function LiveLeadResearchPage({
                           <form action={rejectLiveResearchLeadAction}>
                             <input name="leadId" type="hidden" value={lead.leadId} />
                             <input name="productSlug" type="hidden" value={product.slug} />
-                            <button className="button warning" type="submit">
+                            <SubmitButton className="button warning" pendingLabel="جارٍ الرفض...">
                               رفض / غير مناسب
-                            </button>
+                            </SubmitButton>
                           </form>
                         ) : null}
                       </div>

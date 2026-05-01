@@ -22,7 +22,23 @@ if (process.env.NODE_ENV !== "production") {
 }
 
 export function hasDatabaseUrl() {
-  return Boolean(process.env.DATABASE_URL);
+  return Boolean(process.env.DATABASE_URL && process.env.DATABASE_URL.trim().length > 0);
+}
+
+/**
+ * Strict guard for code paths that REQUIRE a working database (audit log writes,
+ * approval gate checks, workflow persistence). Throws a clear error rather than
+ * degrading to preview mode.
+ *
+ * Use sparingly — most code should call `hasDatabaseUrl()` and degrade gracefully.
+ */
+export function assertDatabaseUrl(): void {
+  if (!hasDatabaseUrl()) {
+    throw new Error(
+      "DATABASE_URL is required for this operation but is missing or empty. " +
+        "Add it to your .env file (and to Vercel Project Settings → Environment Variables)."
+    );
+  }
 }
 
 export const manualMode = true;

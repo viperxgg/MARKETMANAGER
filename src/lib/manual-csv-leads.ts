@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { prisma } from "./db";
 import { ensureProductRecord } from "./data-service";
+import { completeJsonViaDispatch } from "./integrations/openai/helpers";
 import { getOpenAiTextConfig, isOpenAiTextConfigured } from "./openai-config";
 import { getProduct, ProductSlug } from "./product-data";
 import { productSlugSchema } from "./validation";
@@ -353,44 +354,17 @@ async function callOpenAiForCsvLeads(
   context: Awaited<ReturnType<typeof loadCsvContext>>,
   rows: Array<CsvRow & { rowNumber: number }>
 ) {
-  const { apiKey, model } = getOpenAiTextConfig();
+  // Asserts text config is present and surfaces openAiTextConfigurationError if not.
+  getOpenAiTextConfig();
 
-  const response = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      model,
-      messages: [
-        {
-          role: "system",
-          content:
-            "You are a careful Swedish B2B lead scorer. Return JSON only. Never invent companies or emails. Never send outreach."
-        },
-        {
-          role: "user",
-          content: buildPrompt(context, rows)
-        }
-      ],
-      response_format: { type: "json_object" },
-      temperature: 0.2
-    })
+  const text = await completeJsonViaDispatch({
+    system:
+      "You are a careful Swedish B2B lead scorer. Return JSON only. Never invent companies or emails. Never send outreach.",
+    user: buildPrompt(context, rows),
+    temperature: 0.2
   });
 
-  if (!response.ok) {
-    throw new Error("OpenAI CSV lead scoring failed.");
-  }
-
-  const payload = await response.json();
-  const content = payload?.choices?.[0]?.message?.content;
-
-  if (typeof content !== "string") {
-    throw new Error("OpenAI response did not include content.");
-  }
-
-  return scoredCsvOutputSchema.parse(parseJsonObject(content));
+  return scoredCsvOutputSchema.parse(parseJsonObject(text));
 }
 
 function applyDuplicateRisk(

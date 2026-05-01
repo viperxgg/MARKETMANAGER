@@ -18,7 +18,7 @@ export default async function ProductPage({
   searchParams
 }: {
   params: Promise<{ slug: string }>;
-  searchParams: Promise<{ notice?: string; showDismissed?: string }>;
+  searchParams: Promise<{ notice?: string; showDismissed?: string; runId?: string }>;
 }) {
   const [{ slug }, query] = await Promise.all([params, searchParams]);
   const data = await getProductWorkspace(slug, {
@@ -31,7 +31,7 @@ export default async function ProductPage({
 
   return (
     <AppShell>
-      <Notice code={query.notice} />
+      <Notice code={query.notice} runId={query.runId} />
       <ProductWorkspace data={data} />
     </AppShell>
   );

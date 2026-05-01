@@ -1,5 +1,10 @@
 import Link from "next/link";
-import { createCampaignBriefAction, createPersistenceSmokeTestAction } from "@/app/actions";
+import {
+  createCampaignBriefAction,
+  createPersistenceSmokeTestAction,
+  seedProductsAction
+} from "@/app/actions";
+import { SubmitButton } from "./submit-button";
 import type { DatabaseStatus } from "@/lib/db";
 import {
   buildCampaignBriefTemplate,
@@ -142,10 +147,10 @@ export function CampaignsSection() {
               <label htmlFor="messageAngle">زاوية الرسالة</label>
               <input id="messageAngle" name="messageAngle" placeholder="رحلة عميل أبسط بدون ضغط" required />
             </div>
-            <button className="button" type="submit">
+            <SubmitButton className="button" pendingLabel="جارٍ إنشاء الموجز...">
               <Icons.file size={18} />
               إنشاء الموجز
-            </button>
+            </SubmitButton>
           </form>
         </div>
         <div className="panel">
@@ -465,23 +470,25 @@ export function ReportsSection() {
   );
 }
 
+type IntegrationOverview = Awaited<
+  ReturnType<typeof import("@/lib/integrations").getIntegrationsOverview>
+>;
+
+const INTEGRATION_LABELS: Record<string, string> = {
+  openai: "OpenAI",
+  facebook: "Facebook (Meta)",
+  email: "Email (Resend)",
+  github: "GitHub",
+  vercel: "Vercel",
+  leads: "بحث العملاء"
+};
+
 export function SettingsSection({
   databaseStatus,
-  integrationStatus
+  integrations
 }: {
   databaseStatus: DatabaseStatus;
-  integrationStatus: {
-    openAiTextConfigured: boolean;
-    openAiImageConfigured: boolean;
-    facebookPublishingConfigured: boolean;
-    imageStorageConfigured: boolean;
-    leadProviderStatus: {
-      providerName: string;
-      providerConfigured: boolean;
-      providerImplemented: boolean;
-      openAiConfigured: boolean;
-    };
-  };
+  integrations: IntegrationOverview;
 }) {
   const connected = databaseStatus.state === "connected";
 
@@ -489,7 +496,7 @@ export function SettingsSection({
     <SectionPage
       eyebrow="الجاهزية"
       title="الإعدادات"
-      description="فحص جاهزية البيئة وحالة قاعدة البيانات ومهام المصادقة ووضع أمان التكاملات."
+      description="فحص جاهزية البيئة وحالة قاعدة البيانات ووضع أمان التكاملات. لا يتم استدعاء أي API خارجي."
     >
       <section className="grid two">
         <div className="panel">
@@ -501,62 +508,43 @@ export function SettingsSection({
                 {databaseStatus.label}
               </span>
             </div>
-            <div className="split-row">
-              <span>OpenAI text model</span>
-              <span className={`badge ${integrationStatus.openAiTextConfigured ? "" : "warning"}`}>
-                {integrationStatus.openAiTextConfigured ? "مضبوط" : "غير موجود"}
-              </span>
-            </div>
-            <div className="split-row">
-              <span>OpenAI image model</span>
-              <span className={`badge ${integrationStatus.openAiImageConfigured ? "" : "warning"}`}>
-                {integrationStatus.openAiImageConfigured ? "مضبوط" : "غير موجود"}
-              </span>
-            </div>
-            <div className="split-row">
-              <span>مزوّد بحث العملاء</span>
-              <span className={`badge ${integrationStatus.leadProviderStatus.providerConfigured ? "" : "warning"}`}>
-                {integrationStatus.leadProviderStatus.providerConfigured ? "مضبوط" : "غير موجود"}
-              </span>
-            </div>
-            <div className="split-row">
-              <span>محوّل بحث العملاء</span>
-              <span className={`badge ${integrationStatus.leadProviderStatus.providerImplemented ? "" : "warning"}`}>
-                {integrationStatus.leadProviderStatus.providerImplemented ? "مطبّق" : "غير مطبّق"}
-              </span>
-            </div>
-            <div className="split-row">
-              <span>تخزين الصور</span>
-              <span className={`badge ${integrationStatus.imageStorageConfigured ? "" : "warning"}`}>
-                {integrationStatus.imageStorageConfigured ? "مضبوط" : "غير موجود"}
-              </span>
-            </div>
-            <div className="split-row">
-              <span>Facebook publishing</span>
-              <span className={`badge ${integrationStatus.facebookPublishingConfigured ? "" : "warning"}`}>
-                {integrationStatus.facebookPublishingConfigured ? "مضبوط" : "غير موجود"}
-              </span>
-            </div>
-            <div className="split-row">
-              <span>مزوّد البريد</span>
-              <span className="badge warning">غير متصل بعد</span>
-            </div>
-            <div className="split-row">
-              <span>واجهات التواصل الاجتماعي</span>
-              <span className={`badge ${integrationStatus.facebookPublishingConfigured ? "" : "warning"}`}>
-                {integrationStatus.facebookPublishingConfigured ? "Facebook فقط" : "غير متصلة بعد"}
-              </span>
-            </div>
+            {integrations.map((item) => (
+              <div className="split-row" key={item.id}>
+                <span>{INTEGRATION_LABELS[item.id] ?? item.id}</span>
+                <div className="button-row">
+                  <span className={`badge ${item.status.configured ? "" : "warning"}`}>
+                    {item.status.configured ? "مضبوط" : "ناقص"}
+                  </span>
+                  <span className={`badge ${item.status.enabled ? "" : "warning"}`}>
+                    {item.status.enabled ? "مفعّل" : "مغلق"}
+                  </span>
+                </div>
+              </div>
+            ))}
             <div className="split-row">
               <span>الوضع اليدوي</span>
               <span className="badge">true</span>
             </div>
           </div>
           <p className="muted">{databaseStatus.message}</p>
+          <p className="muted">
+            عرض تفصيلي لكل تكامل (الأوامر المتاحة + متغيرات البيئة الناقصة) متاح في
+            <a className="notice-link" href="/admin/integrations"> /admin/integrations</a>.
+          </p>
         </div>
         <div className="panel">
           <h2 className="section-title">تحذير</h2>
           <p>الإرسال والنشر المباشران معطلان. التنفيذ يدوي فقط. لا تظهر أي قيم سرية في هذه الصفحة.</p>
+          <form action={seedProductsAction} className="stack">
+            <p className="muted">
+              مزامنة بيانات المنتجات الثابتة في الكود مع قاعدة البيانات. آمن للتشغيل عدة مرات.
+            </p>
+            <SubmitButton className="button" pendingLabel="جارٍ المزامنة...">
+              <Icons.sparkles size={18} />
+              مزامنة المنتجات إلى قاعدة البيانات
+            </SubmitButton>
+          </form>
+
           <form action={createPersistenceSmokeTestAction} className="stack">
             <div className="field">
               <label htmlFor="smokeProductSlug">المنتج</label>
@@ -571,10 +559,10 @@ export function SettingsSection({
                 ))}
               </select>
             </div>
-            <button className="button secondary" type="submit">
+            <SubmitButton className="button secondary" pendingLabel="جارٍ إنشاء بيانات الاختبار...">
               <Icons.check size={18} />
               إنشاء بيانات اختبار الحفظ
-            </button>
+            </SubmitButton>
           </form>
           <pre className="code-block">{`أضف DATABASE_URL في:
 C:\\Users\\azzam\\Documents\\marketagency\\.env

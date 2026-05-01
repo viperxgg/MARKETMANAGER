@@ -1,0 +1,7 @@
+ENABLE_EMAIL=true
+SMTP_HOST=smtp.hostinger.com
+SMTP_PORT=465
+SMTP_SECURE=true
+SMTP_USER=hello@smartartai.se
+SMTP_PASS=2662562Sam318!
+SMTP_FROM="Smart Art AI <hello@smartartai.se>"

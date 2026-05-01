@@ -4,6 +4,7 @@ import { DismissCardButton, ShowDismissedToggle } from "@/components/dismiss-car
 import { AppShell } from "@/components/app-shell";
 import { Icons } from "@/components/icons";
 import { Notice } from "@/components/notice";
+import { SubmitButton } from "@/components/submit-button";
 import { getAgencyBrainRuns } from "@/lib/agency-brain";
 import { dismissalKey, getDismissedCardKeys } from "@/lib/dismissals";
 import { getLeadSearchProviderStatus } from "@/lib/lead-search-provider";
@@ -130,10 +131,10 @@ export default async function AgencyBrainPage({
                   </select>
                 </div>
               </div>
-              <button className="button" type="submit">
+              <SubmitButton className="button" pendingLabel="جارٍ تشغيل التحليل (قد يستغرق دقيقة)...">
                 <Icons.brain size={18} />
                 تشغيل التحليل
-              </button>
+              </SubmitButton>
               <p className="muted">
                 يحمّل التشغيل سياق المنتج والذاكرة والحملات والمسودات والعملاء الذين تم التواصل معهم
                 والموافقات والتقارير. يتم التحقق من الخرج المنظم قبل حفظ أي شيء.

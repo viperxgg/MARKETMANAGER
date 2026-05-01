@@ -1,5 +1,9 @@
 import Link from "next/link";
-import { generateFacebookImageAction, generateFacebookPostAction } from "@/app/actions";
+import {
+  generateFacebookImageAction,
+  generateFacebookPostAction,
+  runLeadResearchPipelineAction
+} from "@/app/actions";
 import { parseContentStudioNotes } from "@/lib/content-studio";
 import { isOpenAiImageConfigured } from "@/lib/openai-config";
 import { channelAr, duplicateRiskAr, statusAr } from "@/lib/ui-ar";
@@ -137,6 +141,22 @@ export function ProductWorkspace({ data }: { data: ProductWorkspaceData }) {
             <Icons.search size={18} />
             البحث عن عملاء اليوم
           </Link>
+          <form action={runLeadResearchPipelineAction}>
+            <input name="productSlug" type="hidden" value={product.slug} />
+            <input name="targetCount" type="hidden" value="20" />
+            <input
+              name="returnTo"
+              type="hidden"
+              value={`/products/${product.slug}`}
+            />
+            <SubmitButton
+              className="button secondary"
+              pendingLabel="جارٍ تشغيل سير عمل البحث..."
+            >
+              <Icons.target size={18} />
+              تشغيل سير عمل بحث عملاء (20 عميل)
+            </SubmitButton>
+          </form>
           <Link className="button secondary" href={`/outreach-studio?product=${product.slug}`}>
             <Icons.mail size={18} />
             إنشاء بريد تواصل

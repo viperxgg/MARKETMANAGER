@@ -4,6 +4,7 @@ import { createContactVerificationAction, createOutreachDraftAction } from "@/ap
 import { AppShell } from "@/components/app-shell";
 import { Icons } from "@/components/icons";
 import { Notice } from "@/components/notice";
+import { SubmitButton } from "@/components/submit-button";
 import { getLeadDetail } from "@/lib/data-service";
 import { getProduct } from "@/lib/product-data";
 import { statusAr } from "@/lib/ui-ar";
@@ -162,10 +163,10 @@ export default async function LeadDetailPage({
                   <label>ملاحظات</label>
                   <textarea name="notes" />
                 </div>
-                <button className="button" type="submit">
+                <SubmitButton className="button" pendingLabel="جارٍ التحقق من جهة الاتصال...">
                   <Icons.check size={18} />
                   التحقق من جهة الاتصال
-                </button>
+                </SubmitButton>
               </form>
             )}
           </div>
@@ -205,10 +206,14 @@ export default async function LeadDetailPage({
             <input name="closing" type="hidden" value={suggestedEmail.closing} />
             <input name="optOutText" type="hidden" value={suggestedEmail.optOutText} />
             <input name="bodyPreview" type="hidden" value={suggestedEmail.bodyPreview} />
-            <button className="button" disabled={!canSaveOutreachDraft} type="submit">
+            <SubmitButton
+              className="button"
+              disabled={!canSaveOutreachDraft}
+              pendingLabel="جارٍ حفظ مسودة التواصل..."
+            >
               <Icons.mail size={18} />
               حفظ كمسودة تواصل
-            </button>
+            </SubmitButton>
             {!canSaveOutreachDraft ? (
               <span className="muted">
                 يحتاج العميل إلى درجة ملاءمة 85 أو أكثر ومصدر بريد رسمي متحقق قبل إنشاء المسودة.

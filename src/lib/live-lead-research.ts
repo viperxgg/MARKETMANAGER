@@ -6,6 +6,7 @@ import {
   LeadSearchProviderStatus,
   LeadSearchResult
 } from "./lead-search-provider";
+import { completeJsonViaDispatch } from "./integrations/openai/helpers";
 import { getOpenAiTextConfig } from "./openai-config";
 import { getProduct, ProductSlug } from "./product-data";
 import {
@@ -359,44 +360,17 @@ async function callOpenAiForLeadResearch(
   context: Awaited<ReturnType<typeof loadResearchContext>>,
   candidates: Awaited<ReturnType<typeof enrichSearchResults>>
 ) {
-  const { apiKey, model } = getOpenAiTextConfig();
+  // Asserts text config is present and surfaces openAiTextConfigurationError if not.
+  getOpenAiTextConfig();
 
-  const response = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      model,
-      messages: [
-        {
-          role: "system",
-          content:
-            "You are a careful Swedish B2B lead researcher. Return JSON only. Never invent leads or emails. Never send or approve outreach."
-        },
-        {
-          role: "user",
-          content: buildPrompt(context, candidates)
-        }
-      ],
-      response_format: { type: "json_object" },
-      temperature: 0.2
-    })
+  const text = await completeJsonViaDispatch({
+    system:
+      "You are a careful Swedish B2B lead researcher. Return JSON only. Never invent leads or emails. Never send or approve outreach.",
+    user: buildPrompt(context, candidates),
+    temperature: 0.2
   });
 
-  if (!response.ok) {
-    throw new Error("OpenAI lead research failed.");
-  }
-
-  const payload = await response.json();
-  const content = payload?.choices?.[0]?.message?.content;
-
-  if (typeof content !== "string") {
-    throw new Error("OpenAI response did not include content.");
-  }
-
-  return liveLeadResearchOutputSchema.parse(parseJsonObject(content));
+  return liveLeadResearchOutputSchema.parse(parseJsonObject(text));
 }
 
 function withDuplicateRisk(

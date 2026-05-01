@@ -1,6 +1,12 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { runAgent } from "@/agents";
+import { dispatch } from "@/lib/integrations";
+import { getAllowedEmails, isAuthAllowedEmail } from "@/lib/env";
+import { runWorkflow } from "@/lib/workflows";
+import type { ProductSlug } from "@/lib/product-data";
+import { requireOwner } from "@/lib/require-auth";
 import { dismissCard, restoreDismissedCard } from "@/lib/dismissals";
 import { generateFacebookImageAsset } from "@/lib/facebook-image-assets";
 import { runAgencyBrain } from "@/lib/agency-brain";
@@ -11,7 +17,9 @@ import { ensureProductRecord } from "@/lib/data-service";
 import { importManualCsvLeads } from "@/lib/manual-csv-leads";
 import { openAiTextConfigurationError } from "@/lib/openai-config";
 import { getProduct, products } from "@/lib/product-data";
-import { publishToFacebook } from "@/services/facebook-publisher";
+// Legacy direct publisher kept for backwards compatibility — Facebook now goes
+// through dispatch("facebook.publish_post", ...) in approveAndPublishFacebookAction.
+// import { publishToFacebook } from "@/services/facebook-publisher";
 import {
   approveAndPublishFacebookSchema,
   campaignBriefSchema,
@@ -26,6 +34,7 @@ import {
   manualMetricSchema,
   memorySchema,
   outreachDraftSchema,
+  rejectLiveResearchLeadSchema,
   reportSchema,
   runTodaySchema,
   socialDraftSchema,
@@ -297,6 +306,34 @@ export async function runAgencyBrainAction(formData: FormData) {
 
   let reportId = "";
 
+  // New code path. Routing, memory injection, and post-execution safety scans
+  // run inside the orchestrator. Toggle off by unsetting the env var.
+  if (process.env.USE_AGENT_RUNTIME === "true") {
+    try {
+      const { results } = await runAgent({
+        intent: `${parsed.data.objective} for ${parsed.data.scope}`,
+        objective: parsed.data.objective,
+        payload: { scope: parsed.data.scope },
+        context: {
+          productSlug: parsed.data.scope === "global" ? undefined : parsed.data.scope,
+          operator: { email: process.env.OWNER_EMAIL ?? "" },
+          dbAvailable: hasDatabaseUrl(),
+          dryRun: false
+        }
+      });
+      const primary = results[0]?.output as { reportId?: string } | undefined;
+      reportId = primary?.reportId ?? "";
+    } catch (error) {
+      if (error instanceof Error && error.message === openAiTextConfigurationError) {
+        notice("/agency-brain", "openai-config-missing");
+      }
+      notice("/agency-brain", "agency-brain-error");
+    }
+
+    notice(`/agency-brain?report=${reportId}`, "agency-brain-created");
+  }
+
+  // Legacy path. Kept until every agent skill is fully migrated and tested.
   try {
     const result = await runAgencyBrain(parsed.data);
     reportId = result.reportId;
@@ -1971,6 +2008,11 @@ function buildFacebookMessage(draft: {
 }
 
 export async function approveAndPublishFacebookAction(formData: FormData) {
+  // Defence in depth: middleware already blocks unauthenticated requests, but this
+  // is the only action that triggers external publication, so we re-assert the owner
+  // session inside the action itself.
+  await requireOwner();
+
   const parsed = approveAndPublishFacebookSchema.safeParse({
     approvalId: getString(formData, "approvalId"),
     returnTo: getString(formData, "returnTo") ?? "/approval-center"
@@ -2044,10 +2086,27 @@ export async function approveAndPublishFacebookAction(formData: FormData) {
       })
     ]);
 
-    const result = await publishToFacebook({
-      message,
-      imageUrl
-    });
+    // Dispatch through the integration layer:
+    //   • feature flag (ENABLE_FACEBOOK) checked
+    //   • approval gate enforced (ApprovalItem must have approved_by_owner=true,
+    //     which we just set in the transaction above)
+    //   • input validated by Zod schema
+    //   • ExecutionLog row created (audit trail)
+    const dispatchResult = await dispatch<{ postId?: string }>(
+      "facebook.publish_post",
+      { message, imageUrl },
+      {
+        operator: { email: process.env.OWNER_EMAIL ?? "owner" },
+        approvalItemId: item.id,
+        dryRun: false
+      }
+    );
+
+    const result = {
+      success: dispatchResult.success,
+      postId: dispatchResult.data?.postId,
+      error: dispatchResult.error
+    };
 
     await prisma.publishLog.create({
       data: {
@@ -2124,12 +2183,17 @@ export async function approveAndPublishFacebookAction(formData: FormData) {
 }
 
 export async function rejectLiveResearchLeadAction(formData: FormData) {
-  const leadId = getString(formData, "leadId");
-  const productSlug = getString(formData, "productSlug");
+  const parsed = rejectLiveResearchLeadSchema.safeParse({
+    leadId: getString(formData, "leadId"),
+    productSlug: getString(formData, "productSlug"),
+    reason: getString(formData, "reason") ?? "owner_marked_not_relevant"
+  });
 
-  if (!leadId || !productSlug) {
+  if (!parsed.success) {
     notice("/products", "invalid");
   }
+
+  const { leadId, productSlug, reason } = parsed.data;
 
   if (!hasDatabaseUrl()) {
     notice(`/products/${productSlug}/lead-research/live`, "db-missing");
@@ -2142,7 +2206,7 @@ export async function rejectLiveResearchLeadAction(formData: FormData) {
         status: "not_relevant",
         approved_by_owner: false,
         manual_execution_required: true,
-        notes: "live_lead_research:rejected_by_owner"
+        notes: `live_lead_research:rejected_by_owner:${reason}`
       }
     });
 
@@ -2163,4 +2227,188 @@ export async function rejectLiveResearchLeadAction(formData: FormData) {
   }
 
   notice(`/products/${productSlug}/lead-research/live`, "live-lead-rejected");
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Workflow-triggering actions. Thin wrappers around runWorkflow().
+// Heavy logic lives in src/lib/workflows/pipelines/*.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export async function runLeadResearchPipelineAction(formData: FormData) {
+  await requireOwner();
+
+  const productSlug = getString(formData, "productSlug") as ProductSlug | undefined;
+  const targetCountRaw = getString(formData, "targetCount") ?? "20";
+  const targetCount = Math.max(1, Math.min(50, parseInt(targetCountRaw, 10) || 20));
+  const csvFile = formData.get("csvFile");
+  const returnTo = safeReturnTo(getString(formData, "returnTo"));
+
+  if (!productSlug) {
+    notice(returnTo, "invalid");
+  }
+
+  if (!hasDatabaseUrl()) {
+    notice(returnTo, "db-missing");
+  }
+
+  let csvText: string | undefined;
+  if (csvFile instanceof File && csvFile.size > 0) {
+    csvText = await csvFile.text();
+  }
+
+  const result = await runWorkflow(
+    "lead-research-pipeline",
+    { productSlug: productSlug!, targetCount, csvText },
+    {
+      productSlug,
+      operator: { email: process.env.OWNER_EMAIL ?? "" },
+      dbAvailable: hasDatabaseUrl(),
+      dryRun: false
+    }
+  );
+
+  if (result.status === "failed") {
+    notice(returnTo, "workflow-failed");
+  }
+
+  notice(
+    `${returnTo}${returnTo.includes("?") ? "&" : "?"}runId=${result.runId}`,
+    result.status === "completed" ? "workflow-completed" : "workflow-partial"
+  );
+}
+
+export async function runDailyFocusPipelineAction(formData: FormData) {
+  await requireOwner();
+
+  const productSlugRaw = getString(formData, "productSlug");
+  const productSlug =
+    productSlugRaw === "nord-smart-menu" || productSlugRaw === "stadsync-ai"
+      ? (productSlugRaw as ProductSlug)
+      : undefined;
+
+  if (!hasDatabaseUrl()) {
+    notice("/", "db-missing");
+  }
+
+  const result = await runWorkflow(
+    "daily-focus-pipeline",
+    { productSlug },
+    {
+      productSlug,
+      operator: { email: process.env.OWNER_EMAIL ?? "" },
+      dbAvailable: hasDatabaseUrl(),
+      dryRun: false
+    }
+  );
+
+  const target = productSlug ? `/?product=${productSlug}` : "/";
+
+  if (result.status === "failed") {
+    notice(target, "workflow-failed");
+  }
+
+  notice(
+    `${target}${target.includes("?") ? "&" : "?"}runId=${result.runId}`,
+    result.status === "completed" ? "workflow-completed" : "workflow-partial"
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Admin-only test endpoints. Defence in depth: requireOwner() + dispatcher
+// (feature flag + audit) + per-command recipient whitelist enforcement.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export async function runTestEmailAction(formData: FormData) {
+  await requireOwner();
+
+  const to = getString(formData, "to");
+  if (!to || !isAuthAllowedEmail(to)) {
+    notice("/admin/test-email", "test-email-recipient-rejected");
+  }
+
+  const result = await dispatch<{ messageId?: string }>(
+    "email.send_test_email",
+    { to },
+    {
+      operator: { email: process.env.OWNER_EMAIL ?? to ?? "" },
+      dryRun: false
+    }
+  );
+
+  if (result.success) {
+    notice("/admin/test-email", "test-email-sent");
+  }
+
+  // The dispatcher returns a structured error string. We map the most common
+  // ones to specific notices; everything else falls through to a generic one.
+  if (result.error?.includes("disabled by feature flag")) {
+    notice("/admin/test-email", "test-email-disabled");
+  }
+  if (result.error?.includes("not configured")) {
+    notice("/admin/test-email", "test-email-not-configured");
+  }
+  notice("/admin/test-email", "test-email-failed");
+}
+
+export async function getAllowedTestRecipients() {
+  // Exposed only to the admin test page (server component reads it directly).
+  return getAllowedEmails();
+}
+
+/**
+ * Read-only test of the GitHub integration. Calls `github.latest_commit` which
+ * does NOT require approval (it's a read). Output lands in ExecutionLog.
+ * Defaults to "main" branch.
+ */
+export async function runGithubTestAction() {
+  await requireOwner();
+
+  const result = await dispatch<{ sha: string; message: string; author: string; url: string; date: string }>(
+    "github.latest_commit",
+    { branch: "main" },
+    {
+      operator: { email: process.env.OWNER_EMAIL ?? "" },
+      dryRun: false
+    }
+  );
+
+  if (result.success) {
+    notice("/admin/test-github", "github-test-ok");
+  }
+  if (result.error?.includes("disabled by feature flag")) {
+    notice("/admin/test-github", "github-test-disabled");
+  }
+  if (result.error?.includes("not configured")) {
+    notice("/admin/test-github", "github-test-not-configured");
+  }
+  notice("/admin/test-github", "github-test-failed");
+}
+
+/**
+ * Read-only test of the Vercel integration. Calls `vercel.latest_deployment`
+ * which does NOT require approval (it's a read). No deploy command exists in
+ * code so this cannot trigger a deployment.
+ */
+export async function runVercelTestAction() {
+  await requireOwner();
+
+  const result = await dispatch<{ deployments: unknown[] }>(
+    "vercel.latest_deployment",
+    { limit: 5 },
+    {
+      operator: { email: process.env.OWNER_EMAIL ?? "" },
+      dryRun: false
+    }
+  );
+
+  if (result.success) {
+    notice("/admin/test-vercel", "vercel-test-ok");
+  }
+  if (result.error?.includes("disabled by feature flag")) {
+    notice("/admin/test-vercel", "vercel-test-disabled");
+  }
+  if (result.error?.includes("not configured")) {
+    notice("/admin/test-vercel", "vercel-test-not-configured");
+  }
+  notice("/admin/test-vercel", "vercel-test-failed");
 }

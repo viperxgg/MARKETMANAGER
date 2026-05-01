@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 export default async function Home({
   searchParams
 }: {
-  searchParams: Promise<{ notice?: string; product?: string; showDismissed?: string }>;
+  searchParams: Promise<{ notice?: string; product?: string; showDismissed?: string; runId?: string }>;
 }) {
   const params = await searchParams;
   const data = await getDashboardData(undefined, normalizeProductFilter(params.product), {
@@ -17,7 +17,7 @@ export default async function Home({
 
   return (
     <AppShell>
-      <Notice code={params.notice} />
+      <Notice code={params.notice} runId={params.runId} />
       <DashboardHome data={data} />
     </AppShell>
   );

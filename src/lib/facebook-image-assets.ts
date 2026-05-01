@@ -1,4 +1,5 @@
 import { prisma } from "./db";
+import { generateImageViaDispatch } from "./integrations/openai/helpers";
 import { getOpenAiImageConfig } from "./openai-config";
 import { getProduct } from "./product-data";
 import {
@@ -50,7 +51,9 @@ function buildImagePrompt(input: {
 export async function generateFacebookImageAsset(input: {
   socialPostDraftId: string;
 }): Promise<FacebookImageAssetOutput> {
-  const { apiKey, imageModel } = getOpenAiImageConfig();
+  // Asserts image config is present and surfaces openAiImageConfigurationError if not.
+  // imageModel is also used as the explicit model for the dispatch call below.
+  const { imageModel } = getOpenAiImageConfig();
 
   const draft = await prisma.socialPostDraft.findUnique({
     where: { id: input.socialPostDraftId },
@@ -75,29 +78,15 @@ export async function generateFacebookImageAsset(input: {
     imagePrompt: draft.imagePromptEn
   });
 
-  const response = await fetch("https://api.openai.com/v1/images/generations", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      model: imageModel,
-      prompt: imagePrompt,
-      size: imageSizeForModel(imageModel),
-      n: 1
-    })
+  const result = await generateImageViaDispatch({
+    prompt: imagePrompt,
+    size: imageSizeForModel(imageModel),
+    model: imageModel
   });
 
-  if (!response.ok) {
-    throw new Error("OPENAI_IMAGE_GENERATION_FAILED");
-  }
-
-  const payload = await response.json();
-  const image = payload?.data?.[0];
-  const imageUrl = typeof image?.url === "string" ? image.url : null;
+  const imageUrl = result.imageUrl;
   const storedImageReference =
-    imageUrl ?? (typeof image?.b64_json === "string" ? `data:image/png;base64,${image.b64_json}` : null);
+    imageUrl ?? (result.b64Json ? `data:image/png;base64,${result.b64Json}` : null);
 
   if (!imageUrl && !storedImageReference) {
     throw new Error("OPENAI_IMAGE_GENERATION_EMPTY");

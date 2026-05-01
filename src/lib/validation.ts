@@ -104,6 +104,12 @@ export const contactVerificationSchema = z.object({
   notes: z.string().max(1000).default("")
 });
 
+export const rejectLiveResearchLeadSchema = z.object({
+  leadId: z.string().min(1),
+  productSlug: productSlugSchema,
+  reason: z.string().max(500).default("owner_marked_not_relevant")
+});
+
 export const outreachDraftSchema = z.object({
   leadId: z.string().min(1),
   subject: z.string().min(2).max(180),

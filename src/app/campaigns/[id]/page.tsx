@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { createCampaignLeadReportAction } from "@/app/actions";
 import { AppShell } from "@/components/app-shell";
 import { Notice } from "@/components/notice";
+import { SubmitButton } from "@/components/submit-button";
 import { Icons } from "@/components/icons";
 import { getCampaignDetail } from "@/lib/data-service";
 import { channelAr, statusAr } from "@/lib/ui-ar";
@@ -145,10 +146,10 @@ export default async function CampaignDetailPage({
               <div className="button-row">
                 <form action={createCampaignLeadReportAction}>
                   <input name="campaignId" type="hidden" value={campaign.id} />
-                  <button className="button" type="submit">
+                  <SubmitButton className="button" pendingLabel="جارٍ إنشاء تقرير العملاء...">
                     <Icons.file size={18} />
                     إنشاء تقرير عملاء من العملاء المستوردين
-                  </button>
+                  </SubmitButton>
                 </form>
                 <Link className="button secondary" href="/reports">
                   <Icons.file size={18} />

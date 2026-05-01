@@ -7,6 +7,7 @@ import {
   agencyBrainScopeSchema
 } from "./validation";
 import { getOpenAiTextConfig } from "./openai-config";
+import { completeJsonViaDispatch } from "./integrations/openai/helpers";
 
 export type AgencyBrainScope = "global" | ProductSlug;
 export type AgencyBrainObjective =
@@ -291,44 +292,18 @@ function buildPrompt(context: Awaited<ReturnType<typeof loadAgencyBrainContext>>
 }
 
 async function callOpenAiForAgencyBrain(context: Awaited<ReturnType<typeof loadAgencyBrainContext>>) {
-  const { apiKey, model } = getOpenAiTextConfig();
+  // Asserts text config is present and surfaces openAiTextConfigurationError if not,
+  // preserving the existing notice routing in actions.ts.
+  getOpenAiTextConfig();
 
-  const response = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      model,
-      messages: [
-        {
-          role: "system",
-          content:
-            "You are a careful B2B marketing strategy assistant. Return JSON only. Never suggest automatic sending, publishing, or customer contact."
-        },
-        {
-          role: "user",
-          content: buildPrompt(context)
-        }
-      ],
-      response_format: { type: "json_object" },
-      temperature: 0.3
-    })
+  const text = await completeJsonViaDispatch({
+    system:
+      "You are a careful B2B marketing strategy assistant. Return JSON only. Never suggest automatic sending, publishing, or customer contact.",
+    user: buildPrompt(context),
+    temperature: 0.3
   });
 
-  if (!response.ok) {
-    throw new Error("OpenAI request failed.");
-  }
-
-  const payload = await response.json();
-  const content = payload?.choices?.[0]?.message?.content;
-
-  if (typeof content !== "string") {
-    throw new Error("OpenAI response did not include content.");
-  }
-
-  return agencyBrainOutputSchema.parse(parseJsonObject(content));
+  return agencyBrainOutputSchema.parse(parseJsonObject(text));
 }
 
 export async function runAgencyBrain(input: RunAgencyBrainInput) {

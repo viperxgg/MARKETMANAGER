@@ -1,5 +1,6 @@
 import { prisma } from "./db";
 import { ensureProductRecord } from "./data-service";
+import { completeJsonViaDispatch } from "./integrations/openai/helpers";
 import { getOpenAiTextConfig } from "./openai-config";
 import { getProduct, ProductSlug } from "./product-data";
 import {
@@ -159,44 +160,17 @@ function buildPrompt(context: Awaited<ReturnType<typeof loadStudioContext>>) {
 }
 
 async function callOpenAiForFacebookPost(context: Awaited<ReturnType<typeof loadStudioContext>>) {
-  const { apiKey, model } = getOpenAiTextConfig();
+  // Asserts text config is present and surfaces openAiTextConfigurationError if not.
+  getOpenAiTextConfig();
 
-  const response = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      model,
-      messages: [
-        {
-          role: "system",
-          content:
-            "You write careful Swedish B2B marketing drafts. Return JSON only. Never suggest publishing or contacting customers automatically."
-        },
-        {
-          role: "user",
-          content: buildPrompt(context)
-        }
-      ],
-      response_format: { type: "json_object" },
-      temperature: 0.35
-    })
+  const text = await completeJsonViaDispatch({
+    system:
+      "You write careful Swedish B2B marketing drafts. Return JSON only. Never suggest publishing or contacting customers automatically.",
+    user: buildPrompt(context),
+    temperature: 0.35
   });
 
-  if (!response.ok) {
-    throw new Error("OpenAI text generation failed.");
-  }
-
-  const payload = await response.json();
-  const content = payload?.choices?.[0]?.message?.content;
-
-  if (typeof content !== "string") {
-    throw new Error("OpenAI response did not include content.");
-  }
-
-  return facebookContentStudioOutputSchema.parse(parseJsonObject(content));
+  return facebookContentStudioOutputSchema.parse(parseJsonObject(text));
 }
 
 export async function generateFacebookPostForProduct(productSlug: ProductSlug) {

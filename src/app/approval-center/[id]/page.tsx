@@ -5,6 +5,7 @@ import { AppShell } from "@/components/app-shell";
 import { FacebookPublishForm } from "@/components/facebook-publish-button";
 import { Icons } from "@/components/icons";
 import { Notice } from "@/components/notice";
+import { SubmitButton } from "@/components/submit-button";
 import { getApprovalItemDetail } from "@/lib/data-service";
 import { statusAr } from "@/lib/ui-ar";
 import { isFacebookPublishingConfigured } from "@/services/facebook-publisher";
@@ -29,10 +30,10 @@ function DecisionButton({
     <form action={updateApprovalDecisionAction}>
       <input name="approvalId" type="hidden" value={approvalId} />
       <input name="decision" type="hidden" value={decision} />
-      <button className={className} type="submit">
+      <SubmitButton className={className} pendingLabel="جارٍ التحديث...">
         <Icons.check size={18} />
         {label}
-      </button>
+      </SubmitButton>
     </form>
   );
 }

@@ -1,9 +1,11 @@
 import Link from "next/link";
+import { runDailyFocusPipelineAction } from "@/app/actions";
 import { DashboardData } from "@/lib/data-service";
 import { getLeadSearchProviderStatus } from "@/lib/lead-search-provider";
 import { scopeAr, statusAr } from "@/lib/ui-ar";
 import { DismissCardButton, ShowDismissedToggle } from "./dismiss-card";
 import { Icons } from "./icons";
+import { SubmitButton } from "./submit-button";
 
 function productFilterSuffix(data: DashboardData) {
   if (data.productFilter === "all") {
@@ -43,7 +45,16 @@ export function DashboardHome({ data }: { data: DashboardData }) {
           <p className="muted">النطاق الحالي: {scopeAr(data.productFilterLabel)}</p>
         </div>
         <div className="button-row">
-          <Link className="button" href="/products">
+          <form action={runDailyFocusPipelineAction}>
+            {data.productFilter !== "all" && data.productFilter !== "global" ? (
+              <input name="productSlug" type="hidden" value={data.productFilter} />
+            ) : null}
+            <SubmitButton className="button" pendingLabel="جارٍ تشغيل سير عمل تركيز اليوم...">
+              <Icons.brain size={18} />
+              تشغيل سير عمل تركيز اليوم
+            </SubmitButton>
+          </form>
+          <Link className="button secondary" href="/products">
             <Icons.sparkles size={18} />
             المنتجات
           </Link>
