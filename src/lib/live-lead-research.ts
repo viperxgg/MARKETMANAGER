@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { prisma } from "./db";
 import { ensureProductRecord } from "./data-service";
 import {
@@ -6,6 +7,27 @@ import {
   LeadSearchProviderStatus,
   LeadSearchResult
 } from "./lead-search-provider";
+import type { PlaceRecord } from "./google-places";
+
+/**
+ * Enriched candidate type — what `enrichSearchResults` returns. Carries the
+ * structured `place` object end-to-end so place metadata can be persisted
+ * onto the Lead row at save time. `place` is undefined for non-Places
+ * providers (manual CSV, legacy stubs).
+ */
+type EnrichedCandidate = LeadSearchResult & {
+  domain: string;
+  officialEmail: string | undefined;
+  pageText: string;
+};
+
+/** Subset of place metadata persisted on the Lead row. */
+type LeadPlaceMeta = {
+  sourceProvider?: string;
+  place?: PlaceRecord;
+  incomplete?: boolean;
+  incompleteReasons?: string[];
+};
 import { completeJsonViaDispatch } from "./integrations/openai/helpers";
 import { getOpenAiTextConfig } from "./openai-config";
 import { getProduct, ProductSlug } from "./product-data";
@@ -403,9 +425,22 @@ function withDuplicateRisk(
 
 async function saveLeadForReview(
   lead: LiveLeadResearchLead,
-  context: Awaited<ReturnType<typeof loadResearchContext>>
+  context: Awaited<ReturnType<typeof loadResearchContext>>,
+  placeMeta?: LeadPlaceMeta
 ) {
   const notes = `${notesPrefix}${JSON.stringify(lead)}`;
+  const place = placeMeta?.place;
+  const placeTags: string[] = [];
+  if (placeMeta?.sourceProvider) {
+    placeTags.push(`source:${placeMeta.sourceProvider}`);
+  }
+  if (placeMeta?.incomplete) {
+    placeTags.push("incomplete_lead");
+    for (const reason of placeMeta.incompleteReasons ?? []) {
+      placeTags.push(`missing:${reason.replace(/^missing_/, "")}`);
+    }
+  }
+
   const leadRecord = await prisma.lead.create({
     data: {
       productId: context.productRecord.id,
@@ -423,12 +458,27 @@ async function saveLeadForReview(
       emailSourceUrl: lead.emailSource,
       emailConfidence: "high",
       contactStatus: "not_contacted",
-      tags: ["live-lead-research", context.product.slug, lead.duplicateRisk],
+      tags: [
+        "live-lead-research",
+        context.product.slug,
+        lead.duplicateRisk,
+        ...placeTags
+      ],
       bestEntryAngle: lead.whyTheyMightPay,
       status: "owner_review",
       approved_by_owner: false,
       manual_execution_required: true,
-      notes
+      notes,
+      // ─── Place metadata (additive, all optional) ───────────────────────
+      sourceProvider: placeMeta?.sourceProvider ?? null,
+      sourceMetadata: place ? (place as unknown as Prisma.InputJsonValue) : Prisma.JsonNull,
+      googlePlaceId: place?.placeId ?? null,
+      phone: place?.phone ?? null,
+      address: place?.formattedAddress ?? null,
+      googleMapsUrl: place?.googleMapsUri ?? null,
+      googleRating: place?.rating ?? null,
+      userRatingCount: place?.userRatingCount ?? null,
+      businessStatus: place?.businessStatus ?? null
     }
   });
 
@@ -532,6 +582,9 @@ export async function runLiveLeadResearch(productSlugInput: string): Promise<Liv
     )
   ).flat();
   const candidates = await enrichSearchResults(searchResults);
+  const candidateByDomain = new Map<string, EnrichedCandidate>(
+    candidates.map((c) => [c.domain, c as EnrichedCandidate])
+  );
 
   if (candidates.length === 0) {
     return {
@@ -605,7 +658,16 @@ export async function runLiveLeadResearch(productSlugInput: string): Promise<Liv
       continue;
     }
 
-    const saved = await saveLeadForReview(lead, context);
+    const matchedCandidate = candidateByDomain.get(rootDomain(lead.website));
+    const placeMeta: LeadPlaceMeta | undefined = matchedCandidate
+      ? {
+          sourceProvider: matchedCandidate.sourceProvider,
+          place: matchedCandidate.place,
+          incomplete: matchedCandidate.incomplete,
+          incompleteReasons: matchedCandidate.incompleteReasons
+        }
+      : undefined;
+    const saved = await saveLeadForReview(lead, context, placeMeta);
     runKeys.forEach((key) => seenInRun.add(key));
     leadCards.push({
       ...lead,

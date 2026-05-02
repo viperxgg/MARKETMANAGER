@@ -45,7 +45,8 @@ const searchCompanies: IntegrationCommand<
 
 export const leadsIntegration: Integration = {
   id: "leads",
-  description: "Lead search via configured external provider (Google CSE, SerpAPI, Bing, manual CSV).",
+  description:
+    "Lead search via configured external provider (Google Places API, manual CSV; legacy adapters: SerpAPI, Bing, Google CSE).",
   async status() {
     const provider = getLeadSearchProviderStatus();
     return {

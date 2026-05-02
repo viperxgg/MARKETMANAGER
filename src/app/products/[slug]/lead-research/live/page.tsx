@@ -1,18 +1,27 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
-  rejectLiveResearchLeadAction,
-  runLeadResearchPipelineAction
+  runLeadResearchPipelineAction,
+  runLiveLeadResearchAction
 } from "@/app/actions";
 import { AppShell } from "@/components/app-shell";
 import { Icons } from "@/components/icons";
 import { Notice } from "@/components/notice";
 import { SubmitButton } from "@/components/submit-button";
-import { runLiveLeadResearch } from "@/lib/live-lead-research";
+import { hasDatabaseUrl } from "@/lib/db";
+import { getLeadSearchProviderStatus } from "@/lib/lead-search-provider";
 import { getProduct, products } from "@/lib/product-data";
-import { duplicateRiskAr, statusAr } from "@/lib/ui-ar";
 
 export const dynamic = "force-dynamic";
+
+const researchSteps = [
+  "Load product context",
+  "Check previous contacts",
+  "Search the market",
+  "Score leads",
+  "Draft owner-review outreach",
+  "Save results for approval"
+];
 
 export function generateStaticParams() {
   return products.map((product) => ({
@@ -34,7 +43,17 @@ export default async function LiveLeadResearchPage({
     notFound();
   }
 
-  const result = await runLiveLeadResearch(product.slug);
+  const providerStatus = getLeadSearchProviderStatus();
+  const dbConfigured = hasDatabaseUrl();
+  const canRunLiveResearch =
+    dbConfigured &&
+    providerStatus.providerConfigured &&
+    providerStatus.providerImplemented &&
+    providerStatus.openAiConfigured;
+  const missing = [
+    !dbConfigured ? "DATABASE_URL" : "",
+    ...providerStatus.missing
+  ].filter(Boolean);
 
   return (
     <AppShell>
@@ -42,29 +61,29 @@ export default async function LiveLeadResearchPage({
       <div className="stack large">
         <div className="topbar">
           <div>
-            <div className="eyebrow">بحث العملاء الحي</div>
-            <h1 className="page-title">{product.name}: البحث عن عملاء اليوم</h1>
+            <div className="eyebrow">Live lead research</div>
+            <h1 className="page-title">{product.name}: research control</h1>
             <p className="muted">
-              اكتشاف خاص بالمنتج فقط. لا يتم إرسال بريد، ولا يتم التواصل مع الشركات،
-              وتبقى الموافقة يدوية.
+              Opening this page is read-only. Live provider calls and database writes only run
+              after the owner submits the explicit action below.
             </p>
           </div>
           <Link className="button secondary" href={`/products/${product.slug}`}>
             <Icons.file size={18} />
-            الرجوع إلى المنتج
+            Back to product
           </Link>
         </div>
 
         <section className="panel">
           <div className="split-row">
             <div>
-              <h2 className="section-title">خطوات البحث</h2>
-              <p className="muted">جارٍ البحث عن أفضل عملاء اليوم...</p>
+              <h2 className="section-title">Run status</h2>
+              <p className="muted">{providerStatus.message}</p>
             </div>
-            <span className="badge warning">مراجعة يدوية فقط</span>
+            <span className="badge warning">Owner action required</span>
           </div>
           <ol className="research-steps">
-            {result.steps.map((step) => (
+            {researchSteps.map((step) => (
               <li key={step}>{step}</li>
             ))}
           </ol>
@@ -72,45 +91,79 @@ export default async function LiveLeadResearchPage({
 
         <section className="grid two">
           <div className="panel">
-            <h2 className="section-title">حالة المزوّد</h2>
+            <h2 className="section-title">Configuration</h2>
             <div className="stack">
               <div className="split-row">
-                <span>مزوّد بحث العملاء</span>
-                <span className={result.providerStatus.providerConfigured ? "badge" : "badge warning"}>
-                  {result.providerStatus.providerConfigured ? "مضبوط" : "غير موجود"}
+                <span>Database</span>
+                <span className={dbConfigured ? "badge" : "badge warning"}>
+                  {dbConfigured ? "configured" : "missing"}
                 </span>
               </div>
               <div className="split-row">
-                <span>محوّل المزوّد</span>
-                <span className={result.providerStatus.providerImplemented ? "badge" : "badge warning"}>
-                  {result.providerStatus.providerImplemented ? "مطبّق" : "غير مطبّق"}
+                <span>Lead provider</span>
+                <span className={providerStatus.providerConfigured ? "badge" : "badge warning"}>
+                  {providerStatus.providerConfigured ? "configured" : "missing"}
+                </span>
+              </div>
+              <div className="split-row">
+                <span>Provider adapter</span>
+                <span className={providerStatus.providerImplemented ? "badge" : "badge warning"}>
+                  {providerStatus.providerImplemented ? "implemented" : "not implemented"}
                 </span>
               </div>
               <div className="split-row">
                 <span>OpenAI</span>
-                <span className={result.providerStatus.openAiConfigured ? "badge" : "badge warning"}>
-                  {result.providerStatus.openAiConfigured ? "مضبوط" : "غير موجود"}
+                <span className={providerStatus.openAiConfigured ? "badge" : "badge warning"}>
+                  {providerStatus.openAiConfigured ? "configured" : "missing"}
                 </span>
               </div>
-              <p className="muted">المزوّد المحدد: {result.providerStatus.providerName}</p>
+              <p className="muted">Selected provider: {providerStatus.providerName}</p>
             </div>
           </div>
+
           <div className="panel">
-            <h2 className="section-title">خيارات المزوّد المخططة</h2>
-            <ul className="list bullets">
-              {result.providerStatus.supportedProviders.map((provider) => (
-                <li key={provider}>{provider}</li>
-              ))}
-            </ul>
+            <h2 className="section-title">Live run</h2>
+            {missing.length > 0 ? (
+              <div className="notice warning">
+                Missing or blocked: {missing.join(", ")}
+              </div>
+            ) : null}
+            <form action={runLiveLeadResearchAction} className="stack">
+              <input name="productSlug" type="hidden" value={product.slug} />
+              <input
+                name="returnTo"
+                type="hidden"
+                value={`/products/${product.slug}/lead-research/live`}
+              />
+              <SubmitButton
+                className="button"
+                disabled={!canRunLiveResearch}
+                pendingLabel="Running live research..."
+              >
+                <Icons.search size={18} />
+                Run live lead research
+              </SubmitButton>
+              {!canRunLiveResearch ? (
+                <p className="muted">
+                  The button is disabled until database, provider, adapter, and OpenAI
+                  configuration are all present.
+                </p>
+              ) : (
+                <p className="muted">
+                  This may call the configured lead provider, call OpenAI, and save leads,
+                  outreach drafts, and approval items.
+                </p>
+              )}
+            </form>
           </div>
         </section>
 
         <section className="panel">
           <div className="split-row">
             <div>
-              <h2 className="section-title">استيراد CSV يدوي</h2>
+              <h2 className="section-title">Manual CSV import</h2>
               <p className="muted">
-                ارفع شركات يوفّرها المالك لـ {product.name}. الأعمدة المطلوبة:
+                Upload owner-provided companies for {product.name}. Required columns:
                 companyName, website, officialEmail, businessType, city, notes.
               </p>
             </div>
@@ -125,175 +178,40 @@ export default async function LiveLeadResearchPage({
               value={`/products/${product.slug}/lead-research/live`}
             />
             <div className="field">
-              <label>ملف CSV</label>
+              <label>CSV file</label>
               <input accept=".csv,text/csv" name="csvFile" required type="file" />
             </div>
             <SubmitButton
-              className="button"
-              pendingLabel="جارٍ تشغيل سير عمل بحث العملاء (5 خطوات)..."
+              className="button secondary"
+              pendingLabel="Running CSV lead workflow..."
             >
               <Icons.search size={18} />
-              تشغيل سير عمل بحث العملاء (CSV → تقييم → موافقة)
+              Run CSV lead workflow
             </SubmitButton>
             <p className="muted">
-              يقوم سير العمل تلقائيًا بإنشاء حملة، استيراد العملاء، تقييمهم، دفع المؤهلين إلى مركز الموافقات،
-              وتسجيل الملخص في ذاكرة الوكالة.
+              CSV import is also POST-only. It creates review records only and never contacts
+              companies automatically.
             </p>
           </form>
-          <p className="muted">
-            لا يتم التواصل مع أي جهة تلقائيًا. الصفوف المقبولة تصبح عملاء كمسودة،
-            ورسائل سويدية كمسودة، وعناصر في مركز الموافقات فقط.
-          </p>
         </section>
 
-        {result.status === "missing_configuration" ? (
-          <section className="panel">
-            <h2 className="section-title">مزوّد البحث الحي غير موجود</h2>
-            <p>{result.message}</p>
-            <div className="stack">
-              <strong>إعدادات خادم ناقصة</strong>
-              <ul className="list bullets">
-                {result.missing.map((item) => (
-                  <li key={item}>{item}</li>
-                ))}
-              </ul>
-            </div>
-            <p className="muted">
-              يمكن لاحقًا ربط مزوّد حقيقي مثل Google Custom Search API أو SerpAPI أو Bing Web Search API
-              أو الاستيراد اليدوي من CSV. لن يختلق التطبيق عملاء ولن ينشئ شركات من خيال الذكاء الاصطناعي.
-            </p>
-          </section>
-        ) : (
-          <>
-            <section className="grid two">
-              <div className="panel">
-                <h2 className="section-title">ملخص البحث</h2>
-                <p>{result.summary}</p>
-              </div>
-              <div className="panel">
-                <h2 className="section-title">التعلم من التواصل السابق</h2>
-                <p>{result.outreachLearning}</p>
-              </div>
-            </section>
-
-            {result.warnings.length > 0 ? (
-              <section className="panel">
-                <h2 className="section-title">تحذيرات</h2>
-                <ul className="list bullets">
-                  {result.warnings.map((warning) => (
-                    <li key={warning}>{warning}</li>
-                  ))}
-                </ul>
-              </section>
-            ) : null}
-
-            <section className="panel">
-              <div className="split-row">
-                <div>
-                  <h2 className="section-title">بطاقات العملاء</h2>
-                  <p className="muted">
-                    العملاء بدرجة ملاءمة 80 أو أكثر فقط مؤهلون. العملاء ذوو خطر التكرار المرتفع
-                    يظهرون بوضوح ولا يتم حفظهم.
-                  </p>
-                </div>
-                <span className="badge">{result.leads.length} مقترح</span>
-              </div>
-
-              {result.leads.length === 0 ? (
-                <p className="muted">لم يتم حفظ أي عميل مؤهل في هذا التشغيل.</p>
-              ) : (
-                <div className="stack">
-                  {result.leads.map((lead) => (
-                    <div className="panel subtle" key={`${lead.companyName}-${lead.website}`}>
-                      <div className="split-row">
-                        <strong>{lead.companyName}</strong>
-                        <div className="button-row">
-                          <span className="badge">{lead.fitScore}% ملاءمة</span>
-                          <span className={lead.duplicateRisk === "high" ? "badge warning" : "badge"}>
-                            خطر التكرار: {duplicateRiskAr(lead.duplicateRisk)}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="meta-grid">
-                        <a href={lead.website} rel="noreferrer" target="_blank">
-                          {lead.website}
-                        </a>
-                        <span>{lead.officialEmail}</span>
-                        <a href={lead.emailSource} rel="noreferrer" target="_blank">
-                          مصدر البريد
-                        </a>
-                        <span>{lead.companySizeEstimate}</span>
-                        <span>احتمال القبول: {lead.acceptanceLikelihood}%</span>
-                        <span>{statusAr(lead.contactStatus)}</span>
-                      </div>
-                      <div className="grid two">
-                        <div>
-                          <strong>سبب الاختيار</strong>
-                          <p className="muted">{lead.reasonForSelection}</p>
-                        </div>
-                        <div>
-                          <strong>لماذا قد يدفعون</strong>
-                          <p className="muted">{lead.whyTheyMightPay}</p>
-                        </div>
-                      </div>
-                      <div>
-                        <strong>نقاط الألم الظاهرة</strong>
-                        <ul className="list bullets">
-                          {lead.visiblePainPoints.map((painPoint) => (
-                            <li key={painPoint}>{painPoint}</li>
-                          ))}
-                        </ul>
-                      </div>
-                      <div>
-                        <strong>موضوع البريد المقترح</strong>
-                        <p>{lead.proposedEmailSubject}</p>
-                      </div>
-                      <div>
-                        <strong>نص البريد المقترح</strong>
-                        <pre className="code-block">{lead.proposedEmailBody}</pre>
-                      </div>
-                      {lead.warnings.length > 0 ? (
-                        <div>
-                          <strong>تحذيرات</strong>
-                          <ul className="list bullets">
-                            {lead.warnings.map((warning) => (
-                              <li key={warning}>{warning}</li>
-                            ))}
-                          </ul>
-                        </div>
-                      ) : null}
-                      <div className="button-row">
-                        {lead.leadId ? (
-                          <Link className="button secondary" href={`/leads/${lead.leadId}`}>
-                            <Icons.target size={18} />
-                            حفظ في العملاء
-                          </Link>
-                        ) : (
-                          <span className="badge warning">تم تخطيه بسبب حماية التكرار</span>
-                        )}
-                        {lead.approvalId ? (
-                          <Link className="button secondary" href={`/approval-center/${lead.approvalId}`}>
-                            <Icons.approval size={18} />
-                            إرسال إلى مركز الموافقات
-                          </Link>
-                        ) : null}
-                        {lead.leadId ? (
-                          <form action={rejectLiveResearchLeadAction}>
-                            <input name="leadId" type="hidden" value={lead.leadId} />
-                            <input name="productSlug" type="hidden" value={product.slug} />
-                            <SubmitButton className="button warning" pendingLabel="جارٍ الرفض...">
-                              رفض / غير مناسب
-                            </SubmitButton>
-                          </form>
-                        ) : null}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </section>
-          </>
-        )}
+        <section className="panel">
+          <h2 className="section-title">Next review points</h2>
+          <div className="button-row">
+            <Link className="button secondary" href={`/leads?product=${product.slug}`}>
+              <Icons.target size={18} />
+              Review leads
+            </Link>
+            <Link className="button secondary" href={`/approval-center?product=${product.slug}`}>
+              <Icons.approval size={18} />
+              Review approvals
+            </Link>
+            <Link className="button secondary" href={`/outreach-studio?product=${product.slug}`}>
+              <Icons.mail size={18} />
+              Review outreach drafts
+            </Link>
+          </div>
+        </section>
       </div>
     </AppShell>
   );

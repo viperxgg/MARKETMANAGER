@@ -209,11 +209,25 @@ model Lead {
   followUpDate          DateTime?
   tags                  String[]             @default([])
   bestEntryAngle        String               @default("")
+  // ─── Lead provenance / Google Places metadata ──────────────────────────
+  // All fields below are OPTIONAL and additive. Existing leads remain valid
+  // (no backfill required). Populated by the live-lead-research pipeline
+  // when the source provider is Google Places; null otherwise.
+  sourceProvider        String?              // "google-places" | "manual-csv" | "google-custom-search" | …
+  sourceMetadata        Json?                // full provider payload snapshot for audit/traceability
+  googlePlaceId         String?              @unique
+  phone                 String?
+  address               String?              // Places `formatted_address` — distinct from `city`
+  googleMapsUrl         String?
+  googleRating          Float?
+  userRatingCount       Int?
+  businessStatus        String?              // OPERATIONAL | CLOSED_TEMPORARILY | CLOSED_PERMANENTLY
   leadAnalysis          LeadAnalysis?
   contactVerification   ContactVerification?
   outreachDrafts        OutreachDraft[]
   approvalItems         ApprovalItem[]
   manualTrackingEntries ManualTrackingEntry[]
+  @@index([sourceProvider])
 }
 
 model LeadAnalysis {
