@@ -7,8 +7,8 @@ import { Icons } from "@/components/icons";
 import { Notice } from "@/components/notice";
 import { SubmitButton } from "@/components/submit-button";
 import { getApprovalItemDetail } from "@/lib/data-service";
+import { isFacebookConfigured } from "@/lib/integrations/facebook/client";
 import { statusAr } from "@/lib/ui-ar";
-import { isFacebookPublishingConfigured } from "@/services/facebook-publisher";
 
 export const dynamic = "force-dynamic";
 
@@ -64,7 +64,7 @@ export default async function ApprovalItemDetailPage({
     Boolean(socialPostDraft) &&
     socialPostDraft?.platform === "facebook" &&
     (item.itemType === "social_post_draft" || item.itemType === "content_studio_facebook_post");
-  const facebookConfigured = isFacebookPublishingConfigured();
+  const facebookConfigured = isFacebookConfigured();
   const alreadyPublished = socialPostDraft?.status === "published" || Boolean(socialPostDraft?.providerPostId);
   const publishDisabled = !canPublishFacebook || !facebookConfigured || alreadyPublished;
   const publishDisabledReason = !canPublishFacebook

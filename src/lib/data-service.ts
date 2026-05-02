@@ -42,6 +42,8 @@ export type DashboardData = {
     draftEmails: number;
     draftPosts: number;
     qualifiedLeads: number;
+    /** Leads that have not yet had their contact info verified. */
+    leadsToVerify: number;
     pendingApprovals: number;
   };
   notice?: DashboardNotice;
@@ -127,48 +129,61 @@ export async function getDashboardData(
   }
 
   try {
-    const [dailyRuns, memories, postDrafts, outreachDrafts, campaigns, leads, approvals] =
-      await Promise.all([
-        prisma.dailyRun.findMany({
-          orderBy: { createdAt: "desc" },
-          take: 5,
-          include: { product: true }
-        }),
-        prisma.agencyMemory.findMany({
-          orderBy: { createdAt: "desc" },
-          take: 6,
-          include: { product: true }
-        }),
-        prisma.socialPostDraft.findMany({
-          where: { approved_by_owner: false },
-          orderBy: { createdAt: "desc" },
-          take: 5,
-          include: { product: true }
-        }),
-        prisma.outreachDraft.findMany({
-          where: { approved_by_owner: false },
-          orderBy: { createdAt: "desc" },
-          take: 5,
-          include: { product: true }
-        }),
-        prisma.campaign.findMany({
-          where: { status: { notIn: ["completed", "cancelled", "closed"] } },
-          orderBy: { createdAt: "desc" },
-          take: 10,
-          include: { product: true }
-        }),
-        prisma.lead.findMany({
-          where: { status: "qualified" },
-          take: 10,
-          include: { product: true }
-        }),
-        prisma.approvalItem.findMany({
-          where: { approved_by_owner: false },
-          orderBy: { createdAt: "desc" },
-          take: 10,
-          include: { product: true, campaign: true }
-        })
-      ]);
+    const [
+      dailyRuns,
+      memories,
+      postDrafts,
+      outreachDrafts,
+      campaigns,
+      leads,
+      approvals,
+      leadsToVerifyCount
+    ] = await Promise.all([
+      prisma.dailyRun.findMany({
+        orderBy: { createdAt: "desc" },
+        take: 5,
+        include: { product: true }
+      }),
+      prisma.agencyMemory.findMany({
+        orderBy: { createdAt: "desc" },
+        take: 6,
+        include: { product: true }
+      }),
+      prisma.socialPostDraft.findMany({
+        where: { approved_by_owner: false },
+        orderBy: { createdAt: "desc" },
+        take: 5,
+        include: { product: true }
+      }),
+      prisma.outreachDraft.findMany({
+        where: { approved_by_owner: false },
+        orderBy: { createdAt: "desc" },
+        take: 5,
+        include: { product: true }
+      }),
+      prisma.campaign.findMany({
+        where: { status: { notIn: ["completed", "cancelled", "closed"] } },
+        orderBy: { createdAt: "desc" },
+        take: 10,
+        include: { product: true }
+      }),
+      prisma.lead.findMany({
+        where: { status: "qualified" },
+        take: 10,
+        include: { product: true }
+      }),
+      prisma.approvalItem.findMany({
+        where: { approved_by_owner: false },
+        orderBy: { createdAt: "desc" },
+        take: 10,
+        include: { product: true, campaign: true }
+      }),
+      // Count leads that still need contact verification. Real count, not
+      // capped — used for the "Leads to verify" KPI card.
+      prisma.lead.count({
+        where: { contactStatus: { in: ["not_verified", "discovered"] } }
+      })
+    ]);
 
     const filteredDailyRuns = dailyRuns.filter((run: any) => matchesProductFilter(run, filter));
     const filteredMemories = memories.filter((memory: any) => matchesProductFilter(memory, filter));
@@ -248,6 +263,7 @@ export async function getDashboardData(
         draftEmails: visibleOutreachDrafts.length,
         draftPosts: visiblePostDrafts.length,
         qualifiedLeads: filteredLeads.length,
+        leadsToVerify: leadsToVerifyCount,
         pendingApprovals: visibleApprovals.length + visiblePostDrafts.length + visibleOutreachDrafts.length
       },
       notice,
@@ -388,6 +404,7 @@ function getFallbackDashboardData(
       draftEmails: 0,
       draftPosts: 0,
       qualifiedLeads: 0,
+      leadsToVerify: 0,
       pendingApprovals: 1
     },
     notice,
@@ -727,7 +744,14 @@ export async function getOperatingData(filter: ProductFilter = "all", options: D
       prisma.socialPostDraft.findMany({
         orderBy: { createdAt: "desc" },
         take: 30,
-        include: { product: true, campaign: true, assets: { orderBy: { createdAt: "desc" }, take: 3 } }
+        include: {
+          product: true,
+          campaign: true,
+          assets: { orderBy: { createdAt: "desc" }, take: 3 },
+          // Publish history — newest first, capped at 5 to keep payloads small.
+          // Provider/status/createdAt/error/providerPostId only — no tokens.
+          publishLogs: { orderBy: { attemptedAt: "desc" }, take: 5 }
+        }
       }),
       prisma.approvalItem.findMany({
         orderBy: { createdAt: "desc" },

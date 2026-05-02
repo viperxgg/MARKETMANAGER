@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { runAgent } from "@/agents";
 import { dispatch } from "@/lib/integrations";
-import { getAllowedEmails, isAuthAllowedEmail } from "@/lib/env";
+import { getTestEmailRecipients, isTestEmailRecipient } from "@/lib/env";
 import { runWorkflow } from "@/lib/workflows";
 import type { ProductSlug } from "@/lib/product-data";
 import { requireOwner } from "@/lib/require-auth";
@@ -15,11 +15,9 @@ import { buildDailySummary, buildLeadResearchBrief, buildPostDraft } from "@/lib
 import { hasDatabaseUrl, prisma } from "@/lib/db";
 import { ensureProductRecord } from "@/lib/data-service";
 import { importManualCsvLeads } from "@/lib/manual-csv-leads";
+import { runLiveLeadResearch } from "@/lib/live-lead-research";
 import { openAiTextConfigurationError } from "@/lib/openai-config";
 import { getProduct, products } from "@/lib/product-data";
-// Legacy direct publisher kept for backwards compatibility — Facebook now goes
-// through dispatch("facebook.publish_post", ...) in approveAndPublishFacebookAction.
-// import { publishToFacebook } from "@/services/facebook-publisher";
 import {
   approveAndPublishFacebookSchema,
   campaignBriefSchema,
@@ -2182,6 +2180,40 @@ export async function approveAndPublishFacebookAction(formData: FormData) {
   notice(returnTo, "facebook-published");
 }
 
+export async function runLiveLeadResearchAction(formData: FormData) {
+  await requireOwner();
+
+  const productSlug = getString(formData, "productSlug");
+  const returnTo = safeReturnTo(
+    getString(formData, "returnTo") ??
+      (productSlug ? `/products/${productSlug}/lead-research/live` : "/products")
+  );
+
+  if (!productSlug || !getProduct(productSlug)) {
+    notice(returnTo, "invalid");
+  }
+
+  if (!hasDatabaseUrl()) {
+    notice(returnTo, "db-missing");
+  }
+
+  try {
+    const result = await runLiveLeadResearch(productSlug);
+
+    if (result.status === "missing_configuration") {
+      notice(returnTo, "live-lead-config-missing");
+    }
+
+    if (result.leads.length === 0) {
+      notice(returnTo, "live-lead-run-empty");
+    }
+  } catch {
+    notice(returnTo, "live-lead-run-failed");
+  }
+
+  notice(returnTo, "live-lead-run-completed");
+}
+
 export async function rejectLiveResearchLeadAction(formData: FormData) {
   const parsed = rejectLiveResearchLeadSchema.safeParse({
     leadId: getString(formData, "leadId"),
@@ -2315,14 +2347,14 @@ export async function runDailyFocusPipelineAction(formData: FormData) {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Admin-only test endpoints. Defence in depth: requireOwner() + dispatcher
-// (feature flag + audit) + per-command recipient whitelist enforcement.
+// (feature flag + audit) + OWNER_EMAIL-only test recipient enforcement.
 // ─────────────────────────────────────────────────────────────────────────────
 
 export async function runTestEmailAction(formData: FormData) {
   await requireOwner();
 
   const to = getString(formData, "to");
-  if (!to || !isAuthAllowedEmail(to)) {
+  if (!to || !isTestEmailRecipient(to)) {
     notice("/admin/test-email", "test-email-recipient-rejected");
   }
 
@@ -2352,7 +2384,7 @@ export async function runTestEmailAction(formData: FormData) {
 
 export async function getAllowedTestRecipients() {
   // Exposed only to the admin test page (server component reads it directly).
-  return getAllowedEmails();
+  return getTestEmailRecipients();
 }
 
 /**
