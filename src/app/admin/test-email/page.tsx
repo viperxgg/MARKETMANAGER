@@ -4,7 +4,7 @@ import { AppShell } from "@/components/app-shell";
 import { Icons } from "@/components/icons";
 import { Notice } from "@/components/notice";
 import { SubmitButton } from "@/components/submit-button";
-import { getAllowedEmails } from "@/lib/env";
+import { getTestEmailRecipients } from "@/lib/env";
 import { getIntegrationsOverview } from "@/lib/integrations";
 import { requireOwner } from "@/lib/require-auth";
 
@@ -18,7 +18,7 @@ export default async function AdminTestEmailPage({
   await requireOwner();
 
   const params = await searchParams;
-  const allowed = getAllowedEmails();
+  const allowed = getTestEmailRecipients();
   const overview = await getIntegrationsOverview();
   const email = overview.find((i) => i.id === "email");
   const enabled = Boolean(email?.status.enabled);
@@ -34,8 +34,8 @@ export default async function AdminTestEmailPage({
             <div className="eyebrow">إدارة</div>
             <h1 className="page-title">اختبار بريد Resend</h1>
             <p className="muted">
-              يُرسل بريدًا اختباريًا واحدًا بقالب ثابت إلى عنوان مدرج في{" "}
-              <code>AUTH_ALLOWED_EMAILS</code> فقط. لا يمكن تخصيص الموضوع أو المحتوى.
+              Sends one fixed-template test email to <code>OWNER_EMAIL</code> only.
+              The subject and body cannot be customized.
             </p>
           </div>
           <Link className="button secondary" href="/admin/integrations">
@@ -78,7 +78,7 @@ export default async function AdminTestEmailPage({
             <h2 className="section-title">قالب البريد المرسل</h2>
             <pre className="code-block">
 {`From:    (RESEND_FROM)
-To:      <recipient on AUTH_ALLOWED_EMAILS>
+To:      <OWNER_EMAIL>
 Subject: [Smart Art AI] Integration test
 
 If you received this, your Resend integration
@@ -96,7 +96,7 @@ is working correctly.
           <h2 className="section-title">إرسال الاختبار</h2>
           {allowed.length === 0 ? (
             <div className="notice error">
-              <code>AUTH_ALLOWED_EMAILS</code> فارغ. أضف بريدك إلى المتغير قبل المتابعة.
+              <code>OWNER_EMAIL</code> is empty. Set it before sending a test email.
             </div>
           ) : (
             <form action={runTestEmailAction} className="stack">
@@ -120,8 +120,7 @@ is working correctly.
               </SubmitButton>
               {!canSend && (
                 <p className="muted">
-                  الزر معطّل لأن أحد الشروط غير مستوفى (ENABLE_EMAIL، أو RESEND_*، أو
-                  AUTH_ALLOWED_EMAILS).
+                  The button is disabled because ENABLE_EMAIL, RESEND_*, or OWNER_EMAIL is missing.
                 </p>
               )}
             </form>
@@ -131,7 +130,7 @@ is working correctly.
         <section className="notice warning">
           <strong>ضمانات الأمان:</strong>
           <ul className="list bullets">
-            <li>المسار محمي بـ <code>requireOwner()</code> — جلسة Google ضمن قائمة Whitelist مطلوبة.</li>
+            <li>The route is protected by <code>requireOwner()</code> and credentials auth.</li>
             <li>المستلم يُتحقق منه مرة في الإجراء، ومرة ثانية داخل الأمر نفسه.</li>
             <li>الموضوع والمحتوى ثابتان — لا يمكن للمستخدم حقن أي نص.</li>
             <li>كل محاولة تُسجَّل في <code>ExecutionLog</code> مع المستلم والنتيجة.</li>

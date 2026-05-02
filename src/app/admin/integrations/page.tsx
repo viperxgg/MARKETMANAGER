@@ -161,7 +161,7 @@ export default async function AdminIntegrationsPage({
         <section className="notice warning">
           <strong>تذكير الأمان:</strong> صفحة الفحص هذه لا ترسل أي طلب خارجي. لاختبار التكامل
           الفعلي، استخدم نقاط نهاية الاختبار المخصصة (مثل <code>/admin/test-email</code>) التي
-          تتقيد بقائمة <code>AUTH_ALLOWED_EMAILS</code> ولا ترسل إلى أي عنوان آخر.
+          send only to the configured <code>OWNER_EMAIL</code> test recipient.
         </section>
       </div>
     </AppShell>

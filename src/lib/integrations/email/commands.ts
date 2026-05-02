@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { sendEmail } from "./client";
-import { isAuthAllowedEmail } from "@/lib/env";
+import { isTestEmailRecipient } from "@/lib/env";
 import type { IntegrationCommand } from "../types";
 
 export const sendEmailSchema = z.object({
@@ -38,7 +38,7 @@ export const sendEmailCommand: IntegrationCommand<
 
 /**
  * Self-test email with maximum safety constraints:
- *   - recipient MUST be in AUTH_ALLOWED_EMAILS (validated here too, not just upstream)
+ *   - recipient MUST match OWNER_EMAIL (validated here too, not just upstream)
  *   - subject + body are FIXED templates — caller cannot inject content
  *   - no approval gate (the operator's click on /admin/test-email IS the approval)
  *   - still goes through dispatch() → ExecutionLog audit row + ENABLE_EMAIL flag check
@@ -53,14 +53,14 @@ export const sendTestEmail: IntegrationCommand<
 > = {
   id: "send_test_email",
   description:
-    "Send a fixed-template integration-test email. Recipient must be on AUTH_ALLOWED_EMAILS.",
+    "Send a fixed-template integration-test email. Recipient must match OWNER_EMAIL.",
   schema: sendTestEmailSchema,
   requiresApproval: false,
   async execute(input) {
-    if (!isAuthAllowedEmail(input.to)) {
+    if (!isTestEmailRecipient(input.to)) {
       return {
         success: false,
-        error: "Recipient is not on AUTH_ALLOWED_EMAILS"
+        error: "Recipient is not OWNER_EMAIL"
       };
     }
     const text =
