@@ -9,7 +9,7 @@ import { auth } from "@/auth";
  *   - /sign-in     (the only unauthenticated page)
  *
  * Everything else (pages, server-action POSTs, API routes) requires an authenticated
- * session whose email is on AUTH_ALLOWED_EMAILS — enforced inside auth() via callbacks.
+ * credentials session.
  */
 export default auth((req) => {
   const { pathname, search } = req.nextUrl;

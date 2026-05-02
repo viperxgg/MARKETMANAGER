@@ -2,10 +2,10 @@ import { signIn } from "@/auth";
 
 export const dynamic = "force-dynamic";
 
-async function signInWithGoogle(formData: FormData) {
+async function signInWithCredentials(formData: FormData) {
   "use server";
-  const callbackUrl = String(formData.get("callbackUrl") ?? "/");
-  await signIn("google", { redirectTo: callbackUrl });
+  // Auth.js v5 reads `redirectTo` straight from FormData when present.
+  await signIn("credentials", formData);
 }
 
 export default async function SignInPage({
@@ -40,23 +40,42 @@ export default async function SignInPage({
           تسجيل الدخول
         </h1>
         <p className="muted" style={{ marginBottom: "2rem" }}>
-          هذه لوحة تشغيل خاصة بمالك واحد فقط. الوصول مقيّد ببريد إلكتروني محدّد.
+          هذه لوحة تشغيل خاصة بمالك واحد. أدخل اسم المستخدم وكلمة السر.
         </p>
 
         {hasError && (
           <div className="notice warning" style={{ marginBottom: "1.5rem" }}>
-            تعذّر تسجيل الدخول. تأكد من استخدام البريد الإلكتروني المسموح به.
+            بيانات الدخول غير صحيحة. حاول مجددًا.
           </div>
         )}
 
-        <form action={signInWithGoogle}>
-          <input type="hidden" name="callbackUrl" value={callback} />
+        <form action={signInWithCredentials} className="stack" style={{ textAlign: "right" }}>
+          <input type="hidden" name="redirectTo" value={callback} />
+          <div className="field">
+            <label>اسم المستخدم</label>
+            <input
+              name="username"
+              type="text"
+              required
+              autoComplete="username"
+              autoFocus
+            />
+          </div>
+          <div className="field">
+            <label>كلمة السر</label>
+            <input
+              name="password"
+              type="password"
+              required
+              autoComplete="current-password"
+            />
+          </div>
           <button
             className="button"
             type="submit"
             style={{ width: "100%", justifyContent: "center" }}
           >
-            المتابعة باستخدام Google
+            دخول
           </button>
         </form>
 

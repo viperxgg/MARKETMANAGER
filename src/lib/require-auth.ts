@@ -6,7 +6,7 @@ import { auth } from "@/auth";
  *
  * Middleware already blocks unauthenticated requests, but server actions are
  * POSTs that bypass page-level auth checks. Call this at the top of any
- * mutating server action — it asserts the session AND the email whitelist.
+ * mutating server action — it asserts the credentials session.
  *
  *   export async function deleteSomethingAction(formData: FormData) {
  *     await requireOwner();

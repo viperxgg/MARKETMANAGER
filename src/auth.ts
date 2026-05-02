@@ -1,28 +1,59 @@
-import NextAuth, { type DefaultSession } from "next-auth";
-import Google from "next-auth/providers/google";
+import NextAuth from "next-auth";
+import Credentials from "next-auth/providers/credentials";
 
 /**
- * Single-operator authentication.
+ * Single-operator authentication via username + password.
  *
- * Whitelist comes from AUTH_ALLOWED_EMAILS — comma-separated, case-insensitive.
- * Any email not on the list is rejected at signIn AND defensively dropped from
- * the session callback (defence in depth in case the whitelist is changed mid-session).
+ * Both values come from environment variables (AUTH_USERNAME, AUTH_PASSWORD).
+ * `OWNER_EMAIL` is reused as the canonical session email so all downstream
+ * audit code (ExecutionLog.operatorEmail, getOwnerEmail, requireOwner) keeps
+ * working unchanged.
+ *
+ * Why not OAuth: simpler operator UX for a private tool — no third-party
+ * redirect dance and no OAuth client setup.
+ * The credential check happens entirely server-side inside `authorize`.
  */
-const ALLOWED_EMAILS = (process.env.AUTH_ALLOWED_EMAILS ?? "")
-  .split(",")
-  .map((e) => e.trim().toLowerCase())
-  .filter(Boolean);
-
-function isAllowed(email: string | null | undefined): boolean {
-  if (!email) return false;
-  return ALLOWED_EMAILS.includes(email.toLowerCase());
+function timingSafeEqual(a: string, b: string): boolean {
+  // Constant-time-ish string compare. Avoid early-return on first mismatch so
+  // an attacker cannot infer the password prefix from response timing.
+  let mismatch = a.length ^ b.length;
+  const length = Math.max(a.length, b.length);
+  for (let i = 0; i < length; i++) {
+    const left = i < a.length ? a.charCodeAt(i) : 0;
+    const right = i < b.length ? b.charCodeAt(i) : 0;
+    mismatch |= left ^ right;
+  }
+  return mismatch === 0;
 }
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   providers: [
-    Google({
-      clientId: process.env.AUTH_GOOGLE_ID,
-      clientSecret: process.env.AUTH_GOOGLE_SECRET
+    Credentials({
+      name: "credentials",
+      credentials: {
+        username: { label: "اسم المستخدم", type: "text" },
+        password: { label: "كلمة السر", type: "password" }
+      },
+      async authorize(credentials) {
+        const username = String(credentials?.username ?? "").trim();
+        const password = String(credentials?.password ?? "");
+        const expectedUser = process.env.AUTH_USERNAME?.trim();
+        const expectedPass = process.env.AUTH_PASSWORD;
+        const ownerEmail = process.env.OWNER_EMAIL?.trim();
+
+        if (!expectedUser || !expectedPass) return null;
+        if (!username || !password) return null;
+        if (!timingSafeEqual(username, expectedUser)) return null;
+        if (!timingSafeEqual(password, expectedPass)) return null;
+
+        return {
+          id: "owner",
+          name: username,
+          // Reuse OWNER_EMAIL so audit logs stay consistent with prior runs.
+          // Falls back to a synthetic local address if not configured.
+          email: ownerEmail && ownerEmail.length > 0 ? ownerEmail : `${username}@local`
+        };
+      }
     })
   ],
   pages: {
@@ -33,25 +64,21 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     strategy: "jwt",
     maxAge: 60 * 60 * 24 * 7 // 7 days
   },
-  // Required when running behind Vercel / proxy. Safe to leave on; NextAuth
-  // still validates the Host header against AUTH_URL when set.
+  // Required when running behind Vercel / proxy.
   trustHost: true,
   callbacks: {
-    async signIn({ user }) {
-      return isAllowed(user.email);
-    },
     async jwt({ token, user }) {
       if (user?.email) token.email = user.email;
-      // If the whitelist changes mid-session, expire the token next request.
-      if (token.email && !isAllowed(token.email as string)) {
-        return null as unknown as typeof token;
-      }
+      if (user?.name) token.name = user.name;
       return token;
     },
     async session({ session, token }) {
-      if (!isAllowed((token?.email as string | undefined) ?? session.user?.email)) {
-        // Force the route guard to treat this as unauthenticated.
-        return { ...session, user: undefined as unknown as DefaultSession["user"] };
+      if (token?.email) {
+        session.user = {
+          ...session.user,
+          email: token.email as string,
+          name: (token.name as string | undefined) ?? session.user?.name ?? null
+        };
       }
       return session;
     }
