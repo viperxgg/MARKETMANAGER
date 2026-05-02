@@ -16,12 +16,12 @@ import { z } from "zod";
 const REQUIRED = [
   "DATABASE_URL",
   "AUTH_SECRET",
-  "AUTH_GOOGLE_ID",
-  "AUTH_GOOGLE_SECRET",
-  "AUTH_ALLOWED_EMAILS"
+  "AUTH_USERNAME",
+  "AUTH_PASSWORD",
+  "AUTH_URL"
 ] as const;
 
-const RECOMMENDED = ["AUTH_URL", "OWNER_EMAIL", "OPENAI_API_KEY", "OPENAI_MODEL"] as const;
+const RECOMMENDED = ["DIRECT_URL", "OWNER_EMAIL", "OPENAI_API_KEY", "OPENAI_MODEL"] as const;
 
 type RequiredKey = (typeof REQUIRED)[number];
 
@@ -84,18 +84,13 @@ export function getEnvHealth(): EnvHealth {
   };
 }
 
-export function isAuthAllowedEmail(email: string | null | undefined): boolean {
+export function isTestEmailRecipient(email: string | null | undefined): boolean {
   if (!email) return false;
-  const allowed = (process.env.AUTH_ALLOWED_EMAILS ?? "")
-    .split(",")
-    .map((e) => e.trim().toLowerCase())
-    .filter(Boolean);
-  return allowed.includes(email.toLowerCase());
+  const ownerEmail = process.env.OWNER_EMAIL?.trim().toLowerCase();
+  return Boolean(ownerEmail && email.toLowerCase() === ownerEmail);
 }
 
-export function getAllowedEmails(): string[] {
-  return (process.env.AUTH_ALLOWED_EMAILS ?? "")
-    .split(",")
-    .map((e) => e.trim())
-    .filter(Boolean);
+export function getTestEmailRecipients(): string[] {
+  const ownerEmail = process.env.OWNER_EMAIL?.trim();
+  return ownerEmail ? [ownerEmail] : [];
 }

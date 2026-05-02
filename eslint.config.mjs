@@ -15,6 +15,24 @@ export default [
   },
   js.configs.recommended,
   {
+    // Node CLI scripts (verifiers, codegen, ops). Scoped so global lint
+    // rules stay strict everywhere else.
+    files: ["scripts/**/*.{js,mjs,cjs}"],
+    languageOptions: {
+      ecmaVersion: "latest",
+      sourceType: "module",
+      globals: {
+        process: "readonly",
+        console: "readonly",
+        fetch: "readonly",
+        URL: "readonly",
+        AbortController: "readonly",
+        setTimeout: "readonly",
+        clearTimeout: "readonly"
+      }
+    }
+  },
+  {
     files: ["**/*.{ts,tsx}"],
     languageOptions: {
       parser: tsParser,
