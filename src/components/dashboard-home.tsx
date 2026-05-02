@@ -79,19 +79,31 @@ export function DashboardHome({ data }: { data: DashboardData }) {
         </div>
       </section>
 
+      {/* KPI counter cards — every value is a real query. No fake counts. */}
       <section className="grid three">
-        <div className="panel stat">
-          <span className="muted">منتجات نشطة</span>
-          <span className="stat-value">{data.products.length}</span>
-        </div>
-        <div className="panel stat">
-          <span className="muted">بانتظار مراجعة المالك</span>
+        <Link className="panel stat" href="/approval-center" aria-label="فتح مركز الموافقات">
+          <span className="muted">موافقات معلّقة</span>
           <span className="stat-value">{data.commandStats.pendingApprovals}</span>
-        </div>
-        <div className="panel stat">
-          <span className="muted">مسودات ظاهرة</span>
-          <span className="stat-value">{data.commandStats.draftPosts + data.commandStats.draftEmails}</span>
-        </div>
+          <span className="muted" style={{ fontSize: 12 }}>
+            بانتظار قرار المالك (إيميلات + منشورات + موافقات أخرى)
+          </span>
+        </Link>
+        <Link className="panel stat" href="/approval-center" aria-label="فتح المسودات">
+          <span className="muted">مسودات قيد المراجعة</span>
+          <span className="stat-value">
+            {data.commandStats.draftEmails + data.commandStats.draftPosts}
+          </span>
+          <span className="muted" style={{ fontSize: 12 }}>
+            {data.commandStats.draftEmails} بريد · {data.commandStats.draftPosts} منشور
+          </span>
+        </Link>
+        <Link className="panel stat" href="/leads" aria-label="فتح صفحة العملاء">
+          <span className="muted">عملاء بانتظار التحقق</span>
+          <span className="stat-value">{data.commandStats.leadsToVerify}</span>
+          <span className="muted" style={{ fontSize: 12 }}>
+            contactStatus = not_verified / discovered
+          </span>
+        </Link>
       </section>
 
       <section className="grid two">

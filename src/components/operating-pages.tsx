@@ -996,6 +996,67 @@ export function SocialOperatingPage({ data }: { data: OperatingData }) {
                         </form>
                       ) : null}
                     </div>
+                    {Array.isArray(post.publishLogs) && post.publishLogs.length > 0 ? (
+                      <div className="panel subtle" style={{ padding: 12, marginTop: 4 }}>
+                        <div className="split-row" style={{ marginBottom: 8 }}>
+                          <strong style={{ fontSize: 13 }}>سجل النشر</strong>
+                          <span className="muted" style={{ fontSize: 12 }}>
+                            آخر {post.publishLogs.length} محاولة
+                          </span>
+                        </div>
+                        <ul className="list" style={{ gap: 6 }}>
+                          {post.publishLogs.map((log: AnyRecord) => {
+                            const ok = Boolean(log.success);
+                            return (
+                              <li
+                                key={log.id}
+                                className="split-row"
+                                style={{
+                                  alignItems: "flex-start",
+                                  background: "rgba(255,255,255,0.02)",
+                                  border: "1px solid var(--line)",
+                                  borderRadius: 8,
+                                  padding: "8px 10px"
+                                }}
+                              >
+                                <div style={{ display: "grid", gap: 4 }}>
+                                  <span style={{ fontSize: 13, fontWeight: 700 }}>
+                                    {log.provider}
+                                  </span>
+                                  <span className="muted" style={{ fontSize: 12 }}>
+                                    {log.attemptedAt
+                                      ? new Date(log.attemptedAt as string | Date).toLocaleString(
+                                          "ar"
+                                        )
+                                      : log.createdAt
+                                        ? new Date(log.createdAt as string | Date).toLocaleString(
+                                            "ar"
+                                          )
+                                        : ""}
+                                  </span>
+                                  {ok && log.providerPostId ? (
+                                    <code style={{ direction: "ltr", fontSize: 12 }}>
+                                      post id: {String(log.providerPostId)}
+                                    </code>
+                                  ) : null}
+                                  {!ok && log.error ? (
+                                    <span
+                                      className="warning-text"
+                                      style={{ fontSize: 12, maxWidth: 520 }}
+                                    >
+                                      {String(log.error).slice(0, 240)}
+                                    </span>
+                                  ) : null}
+                                </div>
+                                <span className={`badge ${ok ? "" : "warning"}`}>
+                                  {ok ? "نجاح" : "فشل"}
+                                </span>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      </div>
+                    ) : null}
                   </div>
               );
             })}
@@ -1012,11 +1073,31 @@ export function ApprovalOperatingPage({ data }: { data: OperatingData }) {
     data.productFilter !== "all" ? `?product=${data.productFilter}` : "";
   const basePath = `/approval-center${filterQuery}`;
   const returnTo = `${basePath}${data.showDismissed ? `${basePath.includes("?") ? "&" : "?"}showDismissed=1` : ""}`;
-  const groupedApprovals = approvals.reduce<Record<string, AnyRecord[]>>((groups, item) => {
-    const key = `${item.product?.name ?? "عام"} / ${item.itemType} / ${statusAr(item.status)}`;
-    groups[key] = [...(groups[key] ?? []), item];
-    return groups;
-  }, {});
+  // Bucket approvals into 4 broad categories so the operator can scan
+  // pending work fast. Buckets are stable — empty groups still render with
+  // an empty-state line so the layout doesn't jump.
+  const APPROVAL_BUCKETS = [
+    { id: "email", label: "البريد والتواصل" },
+    { id: "social", label: "المنشورات الاجتماعية" },
+    { id: "leads", label: "العملاء والحملات" },
+    { id: "other", label: "أخرى" }
+  ] as const;
+  type ApprovalBucketId = (typeof APPROVAL_BUCKETS)[number]["id"];
+  const bucketFor = (itemType: string | undefined): ApprovalBucketId => {
+    const t = (itemType ?? "").toLowerCase();
+    if (t.includes("outreach") || t === "email") return "email";
+    if (t.includes("social_post") || t.includes("post_draft")) return "social";
+    if (t === "lead" || t.includes("lead_research") || t.includes("campaign")) return "leads";
+    return "other";
+  };
+  const groupedApprovals = approvals.reduce<Record<ApprovalBucketId, AnyRecord[]>>(
+    (groups, item) => {
+      const id = bucketFor(item.itemType as string | undefined);
+      groups[id].push(item);
+      return groups;
+    },
+    { email: [], social: [], leads: [], other: [] } as Record<ApprovalBucketId, AnyRecord[]>
+  );
 
   return (
     <SectionPage
@@ -1039,47 +1120,68 @@ export function ApprovalOperatingPage({ data }: { data: OperatingData }) {
         {approvals.length === 0 ? (
           <p className="muted">لا توجد عناصر موافقة بعد.</p>
         ) : (
-          <div className="stack">
-            {Object.entries(groupedApprovals).map(([group, items]) => (
-              <div className="panel subtle" key={group}>
-                <div className="split-row">
-                  <strong>{group}</strong>
-                  <span className="badge">{items.length}</span>
-                </div>
-                <div className="stack">
-                  {items.map((item) => (
-                    <div className={`panel ${item._dismissed ? "dismissed-card" : ""}`} key={item.id}>
-                  <div className="split-row">
-                    <strong>{item.itemType}</strong>
-                    <div className="button-row">
-                      <span className="badge warning">{statusAr(item.status)}</span>
-                      <DismissCardButton
-                        itemId={item.id}
-                        itemType="approval_item"
-                        productSlug={item.product?.slug}
-                        returnTo={returnTo}
-                        isDismissed={item._dismissed}
-                      />
-                    </div>
+          <div className="stack large">
+            {APPROVAL_BUCKETS.map(({ id, label }) => {
+              const items = groupedApprovals[id];
+              return (
+                <div className="panel subtle" key={id}>
+                  <div className="split-row" style={{ marginBottom: 8 }}>
+                    <strong>{label}</strong>
+                    <span className="badge">{items.length}</span>
                   </div>
-                  <p className="muted">المنتج: {item.product?.name ?? "عام"}</p>
-                  <p>{item.contentPreview}</p>
-                      <ul className="list bullets">
-                        {(item.riskWarnings ?? []).slice(0, 3).map((warning: string) => (
-                          <li key={warning}>{warning}</li>
-                        ))}
-                        <li>لا يوجد إرسال أو نشر تلقائي.</li>
-                        <li>موافقة المالك مطلوبة قبل التنفيذ اليدوي.</li>
-                      </ul>
-                <Link className="button secondary" href={`/approval-center/${item.id}`}>
-                  <Icons.approval size={18} />
-                  مراجعة العنصر
-                </Link>
+                  {items.length === 0 ? (
+                    <p className="muted" style={{ margin: 0 }}>
+                      لا توجد عناصر في هذه المجموعة.
+                    </p>
+                  ) : (
+                    <div className="stack">
+                      {items.map((item) => (
+                        <div
+                          className={`panel ${item._dismissed ? "dismissed-card" : ""}`}
+                          key={item.id}
+                        >
+                          <div className="split-row">
+                            <strong>{item.itemType}</strong>
+                            <div className="button-row">
+                              <span className="badge warning">
+                                {statusAr(item.status)}
+                              </span>
+                              <DismissCardButton
+                                itemId={item.id}
+                                itemType="approval_item"
+                                productSlug={item.product?.slug}
+                                returnTo={returnTo}
+                                isDismissed={item._dismissed}
+                              />
+                            </div>
+                          </div>
+                          <p className="muted">
+                            المنتج: {item.product?.name ?? "عام"}
+                          </p>
+                          <p>{item.contentPreview}</p>
+                          <ul className="list bullets">
+                            {(item.riskWarnings ?? [])
+                              .slice(0, 3)
+                              .map((warning: string) => (
+                                <li key={warning}>{warning}</li>
+                              ))}
+                            <li>لا يوجد إرسال أو نشر تلقائي.</li>
+                            <li>موافقة المالك مطلوبة قبل التنفيذ اليدوي.</li>
+                          </ul>
+                          <Link
+                            className="button secondary"
+                            href={`/approval-center/${item.id}`}
+                          >
+                            <Icons.approval size={18} />
+                            مراجعة العنصر
+                          </Link>
+                        </div>
+                      ))}
                     </div>
-                  ))}
+                  )}
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </section>

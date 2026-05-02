@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { auth, signOut } from "@/auth";
 import { Icons } from "./icons";
+import { SystemStatusBar } from "./system-status";
 
 async function signOutAction() {
   "use server";
@@ -63,7 +64,10 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
           </form>
         )}
       </aside>
-      <main className="main">{children}</main>
+      <main className="main">
+        <SystemStatusBar />
+        {children}
+      </main>
     </div>
   );
 }

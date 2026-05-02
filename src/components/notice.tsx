@@ -11,8 +11,7 @@ const notices: Record<string, { type: "success" | "warning" | "error"; message: 
   },
   "test-email-recipient-rejected": {
     type: "error",
-    message:
-      "العنوان المُدخل غير موجود في AUTH_ALLOWED_EMAILS. لا يُسمح بالإرسال إلى أي عنوان آخر."
+    message: "The test email recipient must match OWNER_EMAIL."
   },
   "test-email-not-configured": {
     type: "error",
@@ -131,6 +130,22 @@ const notices: Record<string, { type: "success" | "warning" | "error"; message: 
   "live-lead-rejected": {
     type: "warning",
     message: "تم وضع العميل الناتج عن البحث الحي كغير مناسب. لم يتم إرسال أي بريد."
+  },
+  "live-lead-config-missing": {
+    type: "warning",
+    message: "Live lead research did not run because provider, database, or OpenAI configuration is missing."
+  },
+  "live-lead-run-empty": {
+    type: "warning",
+    message: "Live lead research ran but did not save any qualified leads."
+  },
+  "live-lead-run-completed": {
+    type: "success",
+    message: "Live lead research completed. Review any saved leads, drafts, and approval items before manual use."
+  },
+  "live-lead-run-failed": {
+    type: "error",
+    message: "Live lead research failed. No email was sent and no company was contacted automatically."
   },
   "campaign-brief-created": {
     type: "success",
